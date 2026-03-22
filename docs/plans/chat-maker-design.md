@@ -1,526 +1,311 @@
 # chat-maker 设计文档
 
 **创建时间：** 2026-03-21  
-**项目目标：** 开发一个聊天视频生成器，模拟聊天对话输出图片和视频
+**最后更新：** 2026-03-22  
+**项目目标：** 开发一个高质量聊天对话生成器，模拟微信/QQ/钉钉等平台的聊天记录输出图片和视频
 
 ---
 
-## 一、需求概述
+## 一、项目定位与竞品分析
 
-### 1.1 核心功能
+### 1.1 竞品分析
 
-| 功能 | 描述 |
-|------|------|
-| 聊天模拟 | 支持多角色对话编辑 |
-| 动态效果 | 打字机效果、消息弹出、满屏自动滚动 |
-| 视频导出 | MP4 格式，支持多种尺寸 |
-| 图片导出 | 静态截图 |
-| 多平台 UI | 微信/QQ/钉钉等风格，可扩展 |
-| 批量导入 | 支持粘贴大段文字，智能解析 |
+| 项目 | 特点 | 优势 | 劣势 |
+|------|------|------|------|
+| **fake-chat** | WhatsApp风格，React，视频导出 | 有视频功能，现代技术栈 | Stars少，只支持WhatsApp，停更 |
+| **wxdh** | 微信对话生成器，纯HTML/CSS | 功能丰富（红包/转账/状态栏），285 stars | 非原创，停更，无TS，代码质量低 |
+| **chat-maker** (我们的项目) | 微信/QQ/钉钉，React+TS+Vite | 技术先进，多平台，积极维护 | 需要UI细节优化，需丰富功能 |
 
-### 1.2 技术方案
+### 1.2 差异化定位
 
-| 组件 | 技术 |
-|------|------|
-| 渲染 | React + DOM |
-| 截图 | html2canvas |
-| 视频合成 | FFmpeg.wasm |
-| 状态管理 | Zustand |
-| 样式 | Tailwind CSS |
-| 构建 | Vite |
+**我们的优势：**
+- 技术架构领先（TypeScript + Vite + Tailwind CSS）
+- 多平台支持（微信/QQ/钉钉）
+- 导出一致性好（Canvas API 直接渲染）
+- 动态高度支持（多消息不截断）
+- 正在积极维护
+
+**需要改进的方向：**
+- UI 细节还原度（与真实APP对比）
+- 特殊消息类型（红包、转账、语音等）
+- 状态栏和系统UI模拟
+- 更丰富的导出选项
 
 ---
 
-## 二、数据结构
+## 二、当前问题清单
 
-### 2.1 核心类型定义
+### 2.1 已知样式问题
+
+| 问题 | 影响范围 | 优先级 |
+|------|----------|--------|
+| 导出图片文字溢出气泡 | 微信电脑端、钉钉 | 高 |
+| 文字宽度计算不准确 | 全部平台 | 高 |
+| 右对齐文字换行位置错误 | 右边消息 | 高 |
+| Canvas渲染与CSS预览不一致 | 导出功能 | 中 |
+| 字体在不同平台显示差异 | 导出功能 | 中 |
+
+### 2.2 UI 细节差异
+
+| 功能 | 真实APP | 当前项目 | 需改进 |
+|------|---------|----------|--------|
+| 状态栏 | 电量、时间、信号 | ❌ 无 | 需要添加 |
+| 聊天头部 | 复杂布局 | ✅ 基础头部 | 需优化 |
+| 红包消息 | 专有样式 | ❌ 无 | 需要添加 |
+| 转账消息 | 专有样式 | ❌ 无 | 需要添加 |
+| 语音消息 | 专有样式 | ❌ 无 | 需要添加 |
+| 时间戳 | 智能显示 | ✅ 基础 | 需优化 |
+| 撤回消息 | 特殊提示 | ❌ 无 | 可选 |
+
+---
+
+## 三、技术方案更新
+
+### 3.1 导出渲染方案
+
+**当前方案：** Canvas API 直接渲染
+- 优点：性能好，无浏览器兼容问题
+- 缺点：需要手动计算文字布局
+
+**改进方向：**
+```typescript
+// 核心渲染器需要改进的点：
+1. 文字宽度测量精确化
+   - 使用 ctx.measureText() 的实际结果
+   - 对中文字体特殊处理
+   
+2. 布局计算统一化
+   - 预览和导出使用同一套布局逻辑
+   - 避免CSS和Canvas的差异
+   
+3. 字体处理
+   - 确保字体正确加载
+   - 处理字体 fallback
+```
+
+### 3.2 消息类型扩展
 
 ```typescript
-// 消息类型
+// 扩展消息类型
 interface Message {
   id: string;
-  role: 'user' | 'assistant';    // 发送者角色
-  sender: string;                 // 发送者名称
-  avatar: string;                 // 头像 URL
-  content: string;                 // 内容（支持表情）
-  type: 'text' | 'image' | 'voice';
-  timestamp: number;
-}
-
-// 用户配置
-interface UserProfile {
-  id: string;
-  name: string;
-  avatar: string;
   role: 'user' | 'assistant';
-}
-
-// 平台主题
-interface PlatformTheme {
-  id: string;
-  name: string;
-  ratio: '9:16' | '16:9' | '1:1';
-  emojiSet: 'native' | 'wechat' | 'qq';
-  styles: ThemeStyles;
-}
-
-// 对话项目
-interface ChatProject {
-  id: string;
-  name: string;
-  platform: PlatformTheme;
-  users: UserProfile[];
-  messages: Message[];
-  settings: ExportSettings;
-}
-
-// 导出设置
-interface ExportSettings {
-  width: number;
-  height: number;
-  fps: number;
-  videoBitrate: number;
-  typingSpeed: number;           // 打字速度(ms/字)
-  messageInterval: number;        // 消息间隔(ms)
-  scrollEnabled: boolean;        // 满屏滚动
+  sender: string;
+  avatar: string;
+  content: string;
+  type: 'text' | 'image' | 'voice' | 'redpacket' | 'transfer' | 'system';
+  timestamp: number;
+  // 新增：特殊消息数据
+  data?: {
+    // 红包
+    redpacket?: { amount: number; message: string; opened: boolean };
+    // 转账
+    transfer?: { amount: number; status: 'pending' | 'accepted' | 'returned' };
+    // 语音
+    voice?: { duration: number; waveform: number[] };
+    // 图片
+    image?: { url: string; width: number; height: number };
+    // 系统消息
+    system?: string;
+  };
 }
 ```
 
 ---
 
-## 三、平台主题配置
+## 四、开发计划
 
-### 3.1 微信主题示例
+### Phase 1：导出质量优化 (当前阶段)
 
-```typescript
-// themes/wechat.ts
-export const wechatTheme: PlatformTheme = {
-  id: 'wechat',
-  name: '微信',
-  ratio: '9:16',
-  emojiSet: 'wechat',
-  styles: {
-    background: '#f5f5f5',
-    bubbleLeftBg: '#ffffff',
-    bubbleRightBg: '#95ec69',
-    bubbleLeftColor: '#000000',
-    bubbleRightColor: '#000000',
-    headerBg: '#1e1e1e',
-    headerColor: '#ffffff',
-    fontFamily: 'sans-serif',
-    fontSize: 14,
-    bubbleRadius: 8,
-    bubblePadding: 10,
-    avatarSize: 40,
-    messageGap: 8,
-    timeGap: 300,
-  }
-};
-```
+**目标：** 解决导出样式问题，确保导出与预览一致
 
-### 3.2 视频尺寸映射
+| 任务 | 优先级 | 状态 |
+|------|--------|------|
+| 修复文字溢出气泡问题 | 高 | 进行中 |
+| 优化文字宽度测量算法 | 高 | 进行中 |
+| 修复右对齐文字换行 | 高 | 进行中 |
+| 添加字体安全边距 | 中 | 待办 |
+| 统一布局计算逻辑 | 中 | 待办 |
 
-| 平台 | 比例 | 尺寸 |
-|------|------|------|
-| 微信 | 9:16 | 540 x 960 (可配置) |
-| QQ | 9:16 | 540 x 960 (可配置) |
-| 钉钉 | 16:9 | 1280 x 720 (可配置) |
-| 自定义 | 1:1 | 720 x 720 |
+### Phase 2：UI 细节还原
 
----
+**目标：** 提升真实感，与真实APP细节一致
 
-## 四、文字解析规则
+| 任务 | 优先级 | 状态 |
+|------|--------|------|
+| 添加状态栏组件 | 高 | 待办 |
+| 优化聊天头部样式 | 高 | 待办 |
+| 添加时间戳智能显示 | 中 | 待办 |
+| 添加未读消息提示 | 中 | 待办 |
+| 添加网络状态图标 | 低 | 待办 |
 
-### 4.1 支持的输入格式
+### Phase 3：特殊消息类型
 
-```text
-# 格式1：冒号分隔
-用户A: 你好
-用户B: 很高兴认识你
+**目标：** 支持更多消息类型，提升功能性
 
-# 格式2：方括号
-[用户A] 你好
-[用户B] 很高兴认识你
+| 任务 | 优先级 | 状态 |
+|------|--------|------|
+| 红包消息样式 | 高 | 待办 |
+| 转账消息样式 | 高 | 待办 |
+| 语音消息样式 | 中 | 待办 |
+| 图片消息支持 | 中 | 待办 |
+| 系统消息样式 | 中 | 待办 |
+| 撤回消息提示 | 低 | 待办 |
 
-# 格式3：箭头分隔
-用户A -> 你好
-用户B -> 很高兴认识你
+### Phase 4：高级功能
 
-# 格式4：AI对话格式
-Human: 你好
-AI: 你好呀
+**目标：** 增加差异化功能，提升竞争力
 
-# 格式5：带时间戳
-10:30 用户A: 你好
-10:31 用户B: 好的
+| 任务 | 优先级 | 状态 |
+|------|--------|------|
+| 表情包自定义上传 | 中 | 待办 |
+| 头像库扩展 | 中 | 待办 |
+| 多人聊天支持 | 中 | 待办 |
+| 聊天记录加密显示 | 低 | 待办 |
+| 视频导出优化 | 中 | 待办 |
 
-# 格式6：简单双人对白
-- 你好
-- 你好呀
-```
+### Phase 5：产品化
 
-### 4.2 解析规则
+**目标：** 提升用户体验，便于推广
 
-```typescript
-interface ParseRule {
-  id: string;
-  pattern: RegExp;
-  extract: (match: RegExpMatchArray, lineIndex: number) => ParsedMessage;
-  priority: number;
-}
-
-// 解析流程
-function parseConversation(text: string, users: UserProfile[]): Message[] {
-  // 1. 检测使用的格式（自动识别优先级最高的匹配规则）
-  // 2. 按行分割
-  // 3. 识别发送者名称
-  // 4. 提取内容
-  // 5. 自动分配角色（奇数行 user，偶数行 assistant；或根据名称匹配）
-  // 6. 返回 Message[]
-}
-```
-
-### 4.3 解析选项
-
-```typescript
-interface ParseOptions {
-  mergeConsecutive: boolean;     // 连续同一人发言合并
-  autoAssignRoles: boolean;      // 自动分配 user/assistant
-  matchByName: boolean;          // 按名称匹配已有用户
-  preserveEmoji: boolean;        // 保留表情符号
-}
-```
+| 任务 | 优先级 | 状态 |
+|------|--------|------|
+| 完善文档 | 高 | 待办 |
+| 添加使用教程 | 中 | 待办 |
+| 优化响应式布局 | 中 | 待办 |
+| PWA 支持 | 低 | 待办 |
+| 部署到 GitHub Pages | 中 | 待办 |
 
 ---
 
-## 五、头像系统
+## 五、平台主题详细配置
 
-### 5.1 头像来源
-
-| 来源 | 说明 |
-|------|------|
-| 内置头像 | 内置 20+ 套风格头像 |
-| 自动生成 | DiceBear API 生成 |
-| 自定义上传 | 用户上传本地图片 |
-
-### 5.2 内置头像风格
+### 5.1 微信手机端
 
 ```typescript
-const builtInAvatars = {
-  // 卡通风格
-  cartoon: [
-    '/avatars/cartoon/man1.png',
-    '/avatars/cartoon/woman1.png',
-    // ...
-  ],
-  // 真人风格
-  realistic: [
-    '/avatars/realistic/face1.png',
-    // ...
-  ],
-  // 简约风格
-  minimal: [
-    '/avatars/minimal/circle1.png',
-    // ...
-  ],
-};
+// 微信手机端真实参数对比
+真实APP参数：
+- 状态栏高度：44px
+- 头部高度：48px
+- 头像尺寸：42px
+- 气泡圆角：10px
+- 气泡内边距：8px 10px
+- 字号：15px
+- 行高：1.5
 
-// 自动生成（DiceBear）
-function generateAvatar(seed: string, style: string = 'avataaars'): string {
-  return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}`;
-}
+当前项目参数：
+- ✅ 头像尺寸：42px
+- ✅ 气泡圆角：10px
+- ✅ 气泡内边距：8px
+- ✅ 字号：15px
+- ❌ 状态栏：未实现
+- ❌ 头部高度：需要调整
+```
+
+### 5.2 微信电脑端
+
+```typescript
+// 微信电脑端参数
+真实APP参数：
+- 头像尺寸：36px
+- 气泡圆角：6px
+- 气泡内边距：10px
+- 字号：14px
+- 消息间距：8px
+- 最大气泡宽度：约60%（取决于消息长短）
+
+当前项目参数：
+- ✅ 头像尺寸：36px
+- ✅ 气泡圆角：6px
+- ✅ 气泡内边距：10px
+- ✅ 字号：14px
+- ⚠️ 气泡宽度：自适应（可能过宽）
+```
+
+### 5.3 钉钉
+
+```typescript
+// 钉钉参数
+真实APP参数：
+- 头像尺寸：36px
+- 气泡圆角：20px（较大）
+- 气泡内边距：10px
+- 字号：14px
+- 气泡背景：左白右绿
+
+当前项目参数：
+- ✅ 头像尺寸：36px
+- ✅ 气泡圆角：20px
+- ✅ 气泡内边距：10px
+- ✅ 字号：14px
 ```
 
 ---
 
-## 六、表情支持
+## 六、Canvas 渲染优化方案
 
-### 6.1 表情类型
+### 6.1 问题分析
 
-| 类型 | 实现方式 |
-|------|----------|
-| Unicode Emoji | 原生支持 😀 😂 ❤️ |
-| 颜文字 | 原生支持 (╯°□°）╯︵ ┻━┻ |
-| 微信表情 | 图片资源 + shortcode |
-| QQ 表情 | 图片资源 |
+**导出图片文字溢出原因：**
+1. `ctx.measureText()` 对中文字符测量不准确
+2. Canvas 渲染有抗锯齿效果，比测量值略宽
+3. 不同字体的渲染差异
 
-### 6.2 微信表情配置
-
+**解决方案：**
 ```typescript
-interface WechatEmoji {
-  key: string;        // 短代码，如 "[微笑]"
-  name: string;       // 名称
-  url: string;        // 图片 URL
+// 添加文字安全边距
+const textMargin = 4; // 像素
+
+// 换行时使用减小后的宽度
+const maxTextWidth = maxBubbleWidth - bubblePaddingH * 2 - textMargin;
+const lines = wrapText(ctx, msg.content, maxTextWidth);
+
+// 绘制时保持原始宽度
+ctx.fillText(line, x, y);
+```
+
+### 6.2 布局计算改进
+
+**当前问题：**
+- 预览使用 CSS flexbox 布局
+- 导出使用 Canvas 精确计算
+- 两者结果不一致
+
+**改进方案：**
+```typescript
+// 统一布局配置
+interface LayoutConfig {
+  // 内边距
+  padding: { top: number; right: number; bottom: number; left: number };
+  // 气泡间距
+  gap: number;
+  // 最大宽度限制
+  maxWidth: number | 'auto';
+  // 对齐方式
+  alignment: 'left' | 'center' | 'right';
 }
 
-// 表情映射
-const wechatEmojis: WechatEmoji[] = [
-  { key: '[微笑]', name: 'smile', url: '/emojis/wechat/smile.png' },
-  { key: '[撇嘴]', name: 'pout', url: '/emojis/wechat/pout.png' },
-  // ... 100+ 表情
-];
-
-// 渲染时替换
-function parseEmoji(content: string, emojiSet: string): string {
-  // 将 [微笑] 替换为 <img src="..."> 
-}
-```
-
-### 6.3 常用表情清单（优先实现）
-
-```
-[微笑] [撇嘴] [色] [发呆] [得意] [流泪] [害羞] [闭嘴]
-[睡] [大哭] [尴尬] [发怒] [调皮] [呲牙] [惊讶] [难过]
-[酷] [冷汗] [抓狂] [吐] [偷笑] [愉快] [白眼] [傲慢]
-[饥饿] [困] [惊恐] [流汗] [憨笑] [大兵] [奋斗] [咒骂]
-[疑问] [嘘] [晕] [疯了] [衰] [骷髅] [敲打] [再见]
-[擦汗] [抠鼻] [鼓掌] [糗大了] [坏笑] [左哼哼] [右哼哼]
-[哈欠] [鄙视] [委屈] [快哭了] [阴险] [亲亲] [吓] [可怜]
-```
-
----
-
-## 七、动画引擎
-
-### 7.1 动画类型
-
-| 动画 | 触发时机 | 配置项 |
-|------|----------|--------|
-| 打字机 | 每条消息 | typingSpeed (ms/字) |
-| 消息弹入 | 每条消息 | messageInterval (ms) |
-| 自动滚动 | 满屏时 | scrollThreshold (%) |
-| 暂停等待 | 特定消息 | pauseDuration (ms) |
-
-### 7.2 核心接口
-
-```typescript
-class Animator {
-  constructor(container: HTMLElement, settings: ExportSettings);
-  
-  // 打字机效果
-  async typeText(element: HTMLElement, text: string): Promise<void>;
-  
-  // 消息弹入
-  async showMessage(msg: Message): Promise<void>;
-  
-  // 滚动到底部
-  async scrollToBottom(): Promise<void>;
-  
-  // 等待一段时间
-  wait(ms: number): Promise<void>;
-  
-  // 播放完整对话
-  async play(messages: Message[]): Promise<void>;
-  
-  // 停止播放
-  stop(): void;
-}
-```
-
-### 7.3 播放流程
-
-```
-开始播放
-    ↓
-显示消息1
-    ↓
-打字机动画（content 逐字显示）
-    ↓
-消息弹入动画
-    ↓
-滚动到底部
-    ↓
-等待 messageInterval
-    ↓
-显示消息2
-    ↓
-... (循环)
-    ↓
-播放完成
-```
-
----
-
-## 八、导出模块
-
-### 8.1 导出流程
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  渲染 DOM   │ ──► │ html2canvas │ ──► │   序列帧    │
-│  动画播放   │     │   截图      │     │   Blob[]    │
-└─────────────┘     └─────────────┘     └─────────────┘
-                                                ↓
-                   ┌─────────────┐     ┌─────────────┐
-                   │   MP4 文件   │ ◄── │  FFmpeg     │
-                   │   下载       │     │  合成视频   │
-                   └─────────────┘     └─────────────┘
-```
-
-### 8.2 导出接口
-
-```typescript
-class Exporter {
-  constructor(ffmpeg: FFmpeg);
-  
-  // 截图
-  async captureImage(element: HTMLElement): Promise<Blob>;
-  
-  // 录制视频
-  async recordVideo(
-    container: HTMLElement,
-    messages: Message[],
-    settings: ExportSettings,
-    onProgress: (percent: number) => void
-  ): Promise<Blob>;
-  
-  // 导出文件
-  download(blob: Blob, filename: string): void;
-}
-```
-
-### 8.3 导出配置
-
-```typescript
-const defaultExportSettings: ExportSettings = {
-  width: 540,
-  height: 960,
-  fps: 30,
-  videoBitrate: 2000,
-  typingSpeed: 50,           // 50ms/字
-  messageInterval: 500,      // 500ms
-  scrollEnabled: true,
+// 预览和导出使用同一套配置
+const layoutConfig: LayoutConfig = {
+  padding: { top: 8, right: 10, bottom: 8, left: 10 },
+  gap: 8,
+  maxWidth: 'auto',
+  alignment: 'left'
 };
 ```
 
 ---
 
-## 九、项目结构
+## 七、版本历史
 
-```
-chat-maker/
-├── public/
-│   ├── index.html
-│   ├── emojis/
-│   │   └── wechat/          # 微信表情图片
-│   └── avatars/             # 内置头像
-│       ├── cartoon/
-│       ├── realistic/
-│       └── minimal/
-├── src/
-│   ├── components/
-│   │   ├── platforms/        # 平台 UI 组件
-│   │   │   ├── BaseChat.tsx          # 基础聊天组件
-│   │   │   ├── WechatUI.tsx          # 微信风格
-│   │   │   ├── QQUI.tsx              # QQ 风格
-│   │   │   └── index.ts              # 导出
-│   │   ├── editor/          # 编辑器
-│   │   │   ├── MessageList.tsx       # 消息列表
-│   │   │   ├── MessageItem.tsx        # 单条消息
-│   │   │   ├── MessageInput.tsx       # 输入框
-│   │   │   ├── TextImporter.tsx       # 批量导入
-│   │   │   └── UserManager.tsx       # 用户管理
-│   │   ├── preview/          # 预览区
-│   │   │   └── Preview.tsx
-│   │   ├── exporter/         # 导出控制
-│   │   │   ├── ExportPanel.tsx
-│   │   │   └── ExportProgress.tsx
-│   │   └── common/           # 通用组件
-│   │       ├── Avatar.tsx
-│   │       ├── EmojiPicker.tsx
-│   │       └── Button.tsx
-│   ├── core/
-│   │   ├── animator.ts       # 动画引擎
-│   │   ├── exporter.ts       # 导出器
-│   │   ├── parser.ts         # 文字解析
-│   │   └── ffmpeg.ts         # FFmpeg 封装
-│   ├── stores/
-│   │   └── chatStore.ts      # Zustand 状态管理
-│   ├── themes/
-│   │   ├── wechat.ts
-│   │   ├── qq.ts
-│   │   └── index.ts
-│   ├── types/
-│   │   └── index.ts          # 类型定义
-│   ├── utils/
-│   │   ├── emoji.ts          # 表情解析
-│   │   └── avatar.ts         # 头像工具
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── index.css
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── README.md
-```
-
----
-
-## 十、技术栈详情
-
-| 依赖 | 版本 | 用途 |
-|------|------|------|
-| react | ^18.x | UI 框架 |
-| react-dom | ^18.x | React DOM |
-| typescript | ^5.x | 类型系统 |
-| vite | ^5.x | 构建工具 |
-| zustand | ^4.x | 状态管理 |
-| tailwindcss | ^3.x | 样式 |
-| @ffmpeg/ffmpeg | ^0.12.x | 视频合成 |
-| @ffmpeg/util | ^0.12.x | FFmpeg 工具 |
-| html2canvas | ^1.x | DOM 转图片 |
-| nanoid | ^5.x | ID 生成 |
-
----
-
-## 十一、开发计划
-
-### Phase 1：基础框架
-- [x] 项目初始化（Vite + React + TS）
-- [x] 状态管理配置（Zustand）
-- [x] 基础类型定义
-- [x] Tailwind CSS 配置
-
-### Phase 2：核心 UI
-- [x] 基础聊天组件（BaseChat）
-- [x] 消息列表渲染
-- [x] 消息输入组件
-- [x] 用户/头像管理
-
-### Phase 3：平台主题
-- [x] 微信主题配置
-- [x] 微信 UI 实现
-- [x] QQ 主题配置
-
-### Phase 4：动画引擎
-- [x] 打字机效果
-- [x] 消息弹入动画
-- [x] 自动滚动逻辑
-
-### Phase 5：导出功能
-- [x] FFmpeg.wasm 集成
-- [x] 截图功能
-- [x] 视频录制
-- [x] 进度显示
-
-### Phase 6：批量导入
-- [x] 文字解析器
-- [x] 多种格式支持
-- [x] 导入预览
-
-### Phase 7：表情支持
-- [x] Emoji 渲染
-- [x] 微信表情图片
-- [x] 表情选择器
-
-### Phase 8：优化完善
-- [x] 性能优化
-- [x] 错误处理
-- [x] 部署配置
-
----
-
-## 十二、版本历史
+### v1.2.0 (2026-03-22)
+**Canvas 导出优化**
+- ✅ 修复 Canvas 导出气泡宽度计算错误（ctx.font 顺序问题）
+- ✅ 实现动态画布高度（根据消息数量自动调整）
+- ✅ 统一所有平台显示头像和名字
+- ✅ 优化文字渲染和对齐逻辑
+- ✅ 统一预览/编辑器/导出宽度限制
+- ✅ 清理测试方案按钮和函数
 
 ### v1.1.0 (2026-03-21)
 **编辑和导入功能完善**
@@ -549,5 +334,22 @@ chat-maker/
 
 ---
 
-**当前版本：** v1.1.0  
-**最后更新：** 2026-03-21
+## 八、技术栈详情
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| react | ^18.x | UI 框架 |
+| react-dom | ^18.x | React DOM |
+| typescript | ^5.x | 类型系统 |
+| vite | ^5.x | 构建工具 |
+| zustand | ^4.x | 状态管理 |
+| tailwindcss | ^3.x | 样式 |
+| @ffmpeg/ffmpeg | ^0.12.x | 视频合成 |
+| @ffmpeg/util | ^0.12.x | FFmpeg 工具 |
+| html2canvas | ^1.x | DOM 转图片（备选方案） |
+| nanoid | ^5.x | ID 生成 |
+
+---
+
+**当前版本：** v1.2.0  
+**最后更新：** 2026-03-22

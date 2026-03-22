@@ -14,23 +14,31 @@ function getInitials(name: string): string {
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split('');
+  // 文字安全边距，防止渲染溢出
+  const safeMargin = 2;
+  const effectiveMaxWidth = maxWidth - safeMargin;
+  
+  const chars = text.split('');
   const lines: string[] = [];
   let currentLine = '';
   
-  for (const char of words) {
+  for (const char of chars) {
     const testLine = currentLine + char;
     const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth && currentLine) {
+    
+    // 如果当前行加上新字符超过了有效宽度，就换行
+    if (metrics.width > effectiveMaxWidth && currentLine) {
       lines.push(currentLine);
       currentLine = char;
     } else {
       currentLine = testLine;
     }
   }
+  
   if (currentLine) {
     lines.push(currentLine);
   }
+  
   return lines.length > 0 ? lines : [''];
 }
 
@@ -116,11 +124,17 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const lineHeight = fontSize * 1.5;
     const senderHeight = fontSize * 0.7;
 
+    // 文字安全边距
+    const textSafeMargin = 4;
+
     // 气泡宽度 = 文字宽度 + padding，最大不超过 maxBubbleWidth
+    // 测量时使用减去安全边距的宽度
     const tempLines = wrapText(ctx, msg.content, maxBubbleWidth - bubblePaddingH * 2);
     const maxLineWidth = Math.max(...tempLines.map(line => ctx.measureText(line).width));
+    // 计算气泡宽度时考虑文字边距
     const bubbleWidth = Math.min(maxLineWidth + bubblePaddingH * 2, maxBubbleWidth);
-    const textMaxWidth = bubbleWidth - bubblePaddingH * 2;
+    // 文字最大宽度 = 气泡宽度 - 左右padding - 安全边距
+    const textMaxWidth = bubbleWidth - bubblePaddingH * 2 - textSafeMargin;
     // 重新换行以匹配实际气泡宽度
     const lines = wrapText(ctx, msg.content, textMaxWidth);
     const bubbleHeight = lines.length * lineHeight + bubblePaddingV * 2;
