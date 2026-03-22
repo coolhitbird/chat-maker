@@ -63,11 +63,12 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const statusBarHeight = isMobile ? 24 : 0;
   const avatarSize = styles.avatarSize;
   const gap = styles.messageGap;
-  const bubblePaddingH = styles.bubblePadding + 2;
+  // 保持与CSS预览一致的参数
+  const bubblePaddingH = styles.bubblePadding;  // CSS padding: 8px 10px，水平padding=10
   const bubblePaddingV = styles.bubblePadding;
   const bubbleRadius = styles.bubbleRadius;
   const fontSize = styles.fontSize;
-  const lineHeight = fontSize * 1.5;
+  const lineHeight = 1.4;  // 与CSS lineHeight: 1.4一致
   const contentPadding = styles.messageGap;
 
   ctx.font = `${fontSize}px ${styles.fontFamily}`;
@@ -77,7 +78,9 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   for (const msg of messages) {
     const maxBubbleWidth = width - avatarSize * 2 - contentPadding * 2 - gap * 2;
     const lines = wrapText(ctx, msg.content, maxBubbleWidth - bubblePaddingH * 2);
-    const bubbleHeight = lines.length * lineHeight + bubblePaddingV * 2;
+    // 行高 = fontSize * lineHeight (与CSS一致)
+    const lineHeightPx = fontSize * lineHeight;
+    const bubbleHeight = lines.length * lineHeightPx + bubblePaddingV * 2;
     const rowHeight = Math.max(avatarSize, bubbleHeight) + gap;
     totalContentHeight += rowHeight;
   }
@@ -165,7 +168,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     // 气泡最大宽度 = 总宽度 - 两个头像 - contentPadding*2 - gap*2
     const totalMiddleWidth = width - avatarSize * 2 - contentPadding * 2 - gap * 2;
     const maxBubbleWidth = totalMiddleWidth;
-    const lineHeight = fontSize * 1.5;
     const senderHeight = fontSize * 0.7;
 
     // 文字安全边距，防止渲染溢出
@@ -181,7 +183,9 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const textMaxWidth = bubbleWidth - bubblePaddingH * 2 - textSafeMargin;
     // 重新换行以匹配实际气泡宽度
     const lines = wrapText(ctx, msg.content, textMaxWidth);
-    const bubbleHeight = lines.length * lineHeight + bubblePaddingV * 2;
+    // 行高 = fontSize * lineHeight (与CSS一致)
+    const lineHeightPx = fontSize * lineHeight;
+    const bubbleHeight = lines.length * lineHeightPx + bubblePaddingV * 2;
 
     // 使用共享配置
     const senderHeightRatio = defaultLayoutConfig.avatarSection.senderName.heightRatio;
@@ -215,7 +219,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const textY = bubbleY + bubbleHeight * 0.5;
     
     for (let i = 0; i < lines.length; i++) {
-      const lineOffset = (i - (lines.length - 1) / 2) * lineHeight;
+      const lineOffset = (i - (lines.length - 1) / 2) * lineHeightPx;
       const lineWidth = ctx.measureText(lines[i]).width;
       
       if (isUser) {
