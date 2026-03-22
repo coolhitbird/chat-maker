@@ -72,6 +72,75 @@ export default function ChatContainer({
     };
   };
 
+  const renderStatusBar = () => {
+    if (!isMobile) return null;
+    
+    const statusBarHeight = 24 * effectiveScale;
+    const iconSize = Math.max(10, 12 * effectiveScale);
+    const fontSize = Math.max(9, 10 * effectiveScale);
+    
+    return (
+      <div style={{
+        height: statusBarHeight,
+        backgroundColor: styles.headerBg,
+        color: styles.headerColor,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingLeft: 8 * effectiveScale,
+        paddingRight: 8 * effectiveScale,
+        fontSize,
+        fontFamily: styles.fontFamily,
+      }}>
+        {/* 左侧时间 */}
+        <div style={{ fontWeight: 500 }}>10:30</div>
+        
+        {/* 右侧状态图标 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 * effectiveScale }}>
+          {/* 信号图标 */}
+          <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="currentColor">
+            <rect x="1" y="16" width="4" height="6" rx="1" />
+            <rect x="7" y="12" width="4" height="10" rx="1" />
+            <rect x="13" y="8" width="4" height="14" rx="1" />
+            <rect x="19" y="4" width="4" height="18" rx="1" />
+          </svg>
+          
+          {/* WiFi图标 */}
+          <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z" />
+          </svg>
+          
+          {/* 电量图标 */}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{
+              width: iconSize * 1.5,
+              height: iconSize,
+              border: `1px solid ${styles.headerColor}`,
+              borderRadius: 2,
+              padding: 1,
+              display: 'flex',
+              alignItems: 'center',
+            }}>
+              <div style={{
+                width: '75%',
+                height: '100%',
+                backgroundColor: styles.headerColor,
+                borderRadius: 1,
+              }} />
+            </div>
+            <div style={{
+              width: 2,
+              height: iconSize * 0.5,
+              backgroundColor: styles.headerColor,
+              borderRadius: 1,
+              marginLeft: 1,
+            }} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderHeader = () => {
     if (!config.customHeader) return null;
 
@@ -90,12 +159,9 @@ export default function ChatContainer({
     if (isMobile) {
       return (
         <>
-          <div style={{
-            height: scaledHeaderHeight * 0.3,
-            backgroundColor: styles.headerBg,
-          }} />
+          {renderStatusBar()}
           <div style={headerStyle}>
-            {platform.name}
+            <span style={{ fontWeight: 600 }}>{platform.name}</span>
           </div>
           {chatTitle && (
             <div style={{

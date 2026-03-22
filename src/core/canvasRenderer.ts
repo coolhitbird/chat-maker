@@ -14,10 +14,6 @@ function getInitials(name: string): string {
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  // 文字安全边距，防止渲染溢出
-  const safeMargin = 2;
-  const effectiveMaxWidth = maxWidth - safeMargin;
-  
   const chars = text.split('');
   const lines: string[] = [];
   let currentLine = '';
@@ -26,8 +22,8 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
     const testLine = currentLine + char;
     const metrics = ctx.measureText(testLine);
     
-    // 如果当前行加上新字符超过了有效宽度，就换行
-    if (metrics.width > effectiveMaxWidth && currentLine) {
+    // 如果当前行加上新字符超过了最大宽度，就换行
+    if (metrics.width > maxWidth && currentLine) {
       lines.push(currentLine);
       currentLine = char;
     } else {
@@ -60,7 +56,11 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const userAvatarMap = new Map<string, string>();
   users.forEach(u => userAvatarMap.set(u.name, u.avatar));
 
+  // 是否为移动端（9:16比例）
+  const isMobile = width < height;
+  
   const headerHeight = styles.avatarSize + 8;
+  const statusBarHeight = isMobile ? 24 : 0;
   const avatarSize = styles.avatarSize;
   const gap = styles.messageGap;
   const bubblePaddingH = styles.bubblePadding + 2;
@@ -82,8 +82,8 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     totalContentHeight += rowHeight;
   }
 
-  // Canvas 高度 = header + 内容高度
-  const actualHeight = Math.max(height, headerHeight + totalContentHeight + contentPadding);
+  // Canvas 高度 = 状态栏 + header + 内容高度
+  const actualHeight = Math.max(height, statusBarHeight + headerHeight + totalContentHeight + contentPadding);
 
   canvas.width = width;
   canvas.height = actualHeight;
@@ -92,19 +92,63 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   ctx.fillStyle = styles.background;
   ctx.fillRect(0, 0, width, actualHeight);
 
+  // 绘制状态栏（仅移动端）
+  if (isMobile) {
+    ctx.fillStyle = styles.headerBg;
+    ctx.fillRect(0, 0, width, statusBarHeight);
+    
+    // 状态栏文字
+    ctx.fillStyle = styles.headerColor;
+    ctx.font = `10px ${styles.fontFamily}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('10:30', 8, statusBarHeight / 2);
+    
+    // 绘制信号图标（简化版）
+    const signalX = width - 80;
+    const signalY = statusBarHeight / 2;
+    ctx.fillStyle = styles.headerColor;
+    for (let i = 0; i < 4; i++) {
+      const barHeight = 4 + i * 2;
+      ctx.fillRect(signalX + i * 5, signalY - barHeight / 2, 3, barHeight);
+    }
+    
+    // 绘制WiFi图标（简化版）
+    const wifiX = width - 50;
+    ctx.beginPath();
+    ctx.arc(wifiX, signalY, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(wifiX, signalY, 5, Math.PI, 0, true);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(wifiX, signalY, 8, Math.PI, 0, true);
+    ctx.stroke();
+    
+    // 绘制电量图标
+    const batteryX = width - 30;
+    const batteryWidth = 16;
+    const batteryHeight = 8;
+    ctx.strokeStyle = styles.headerColor;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(batteryX, signalY - batteryHeight / 2, batteryWidth, batteryHeight);
+    ctx.fillRect(batteryX + 1, signalY - batteryHeight / 2 + 1, batteryWidth * 0.75, batteryHeight - 2);
+    ctx.fillRect(batteryX + batteryWidth, signalY - 2, 2, 4);
+  }
+
   // 绘制头部
   ctx.fillStyle = styles.headerBg;
-  ctx.fillRect(0, 0, width, headerHeight);
+  ctx.fillRect(0, statusBarHeight, width, headerHeight);
 
   ctx.fillStyle = styles.headerColor;
   ctx.font = `bold ${styles.fontSize}px ${styles.fontFamily}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(title, width / 2, headerHeight / 2);
+  ctx.fillText(title, width / 2, statusBarHeight + headerHeight / 2);
 
   ctx.font = `${fontSize}px ${styles.fontFamily}`;
 
-  const chatTop = headerHeight;
+  const chatTop = statusBarHeight + headerHeight;
   let y = chatTop + contentPadding;
 
   for (const msg of messages) {
@@ -124,8 +168,8 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const lineHeight = fontSize * 1.5;
     const senderHeight = fontSize * 0.7;
 
-    // 文字安全边距
-    const textSafeMargin = 4;
+    // 文字安全边距，防止渲染溢出
+    const textSafeMargin = 2;
 
     // 气泡宽度 = 文字宽度 + padding，最大不超过 maxBubbleWidth
     // 测量时使用减去安全边距的宽度
