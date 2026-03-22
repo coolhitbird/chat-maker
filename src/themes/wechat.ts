@@ -164,7 +164,7 @@ export function getPlatformConfig(platformId: string): PlatformConfig {
         customHeader: true,
         backgroundPattern: false,
         bubbleTail: true,
-        showSenderName: false,
+        showSenderName: true,
         bubbleTriangle: 'right',
         deviceType: 'mobile',
       };
@@ -176,7 +176,7 @@ export function getPlatformConfig(platformId: string): PlatformConfig {
         customHeader: true,
         backgroundPattern: false,
         bubbleTail: false,
-        showSenderName: false,
+        showSenderName: true,
         bubbleTriangle: 'none',
         deviceType: 'desktop',
       };
@@ -187,7 +187,7 @@ export function getPlatformConfig(platformId: string): PlatformConfig {
         showAvatarBorder: true,
         bubbleTailDirection: true,
         showReadStatus: false,
-        customHeader: false,
+        customHeader: true,
         backgroundPattern: true,
         bubbleTail: true,
         showSenderName: true,
@@ -202,7 +202,7 @@ export function getPlatformConfig(platformId: string): PlatformConfig {
         customHeader: true,
         backgroundPattern: false,
         bubbleTail: false,
-        showSenderName: false,
+        showSenderName: true,
         bubbleTriangle: 'none',
         deviceType: 'desktop',
       };

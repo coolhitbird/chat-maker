@@ -49,17 +49,42 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  canvas.width = width;
-  canvas.height = height;
-
   const userAvatarMap = new Map<string, string>();
   users.forEach(u => userAvatarMap.set(u.name, u.avatar));
 
   const headerHeight = styles.avatarSize + 8;
+  const avatarSize = styles.avatarSize;
+  const gap = styles.messageGap;
+  const bubblePaddingH = styles.bubblePadding + 2;
+  const bubblePaddingV = styles.bubblePadding;
+  const bubbleRadius = styles.bubbleRadius;
+  const fontSize = styles.fontSize;
+  const lineHeight = fontSize * 1.5;
+  const contentPadding = styles.messageGap;
 
+  ctx.font = `${fontSize}px ${styles.fontFamily}`;
+
+  // 第一遍：计算所有消息需要的总高度
+  let totalContentHeight = contentPadding;
+  for (const msg of messages) {
+    const maxBubbleWidth = width - avatarSize * 2 - contentPadding * 2 - gap * 2;
+    const lines = wrapText(ctx, msg.content, maxBubbleWidth - bubblePaddingH * 2);
+    const bubbleHeight = lines.length * lineHeight + bubblePaddingV * 2;
+    const rowHeight = Math.max(avatarSize, bubbleHeight) + gap;
+    totalContentHeight += rowHeight;
+  }
+
+  // Canvas 高度 = header + 内容高度
+  const actualHeight = Math.max(height, headerHeight + totalContentHeight + contentPadding);
+
+  canvas.width = width;
+  canvas.height = actualHeight;
+
+  // 绘制背景
   ctx.fillStyle = styles.background;
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, width, actualHeight);
 
+  // 绘制头部
   ctx.fillStyle = styles.headerBg;
   ctx.fillRect(0, 0, width, headerHeight);
 
@@ -69,18 +94,9 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   ctx.textBaseline = 'middle';
   ctx.fillText(title, width / 2, headerHeight / 2);
 
-  const chatTop = headerHeight;
-  const contentPadding = styles.messageGap;
-
-  const avatarSize = styles.avatarSize;
-  const gap = styles.messageGap;
-  const bubblePaddingH = styles.bubblePadding + 2;
-  const bubblePaddingV = styles.bubblePadding;
-  const bubbleRadius = styles.bubbleRadius;
-  const fontSize = styles.fontSize;
-
   ctx.font = `${fontSize}px ${styles.fontFamily}`;
 
+  const chatTop = headerHeight;
   let y = chatTop + contentPadding;
 
   for (const msg of messages) {
@@ -137,13 +153,24 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     // 文字靠边显示 - 先确保字体正确
     ctx.font = `${fontSize}px ${styles.fontFamily}`;
     ctx.fillStyle = bubbleColor;
-    ctx.textAlign = isUser ? 'right' : 'left';
     ctx.textBaseline = 'middle';
-    const textX = isUser ? bubbleX + bubbleWidth - bubblePaddingH : bubbleX + bubblePaddingH;
     const textY = bubbleY + bubbleHeight * 0.5;
+    
     for (let i = 0; i < lines.length; i++) {
       const lineOffset = (i - (lines.length - 1) / 2) * lineHeight;
-      ctx.fillText(lines[i], textX, textY + lineOffset);
+      const lineWidth = ctx.measureText(lines[i]).width;
+      
+      if (isUser) {
+        // 右对齐：每行文字的右边缘固定，文字向左延伸
+        const textX = bubbleX + bubbleWidth - bubblePaddingH - lineWidth;
+        ctx.textAlign = 'left'; // 临时设置为左对齐来精确控制位置
+        ctx.fillText(lines[i], textX, textY + lineOffset);
+      } else {
+        // 左对齐：每行文字的左边缘固定，文字向右延伸
+        const textX = bubbleX + bubblePaddingH;
+        ctx.textAlign = 'left';
+        ctx.fillText(lines[i], textX, textY + lineOffset);
+      }
     }
 
     // 动态计算行高：头像高度 + 气泡高度（如果气泡超过头像）

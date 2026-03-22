@@ -27,7 +27,7 @@ export default function MessageItem({ message, onDelete, onMoveUp, onMoveDown }:
         <div className="text-xs text-gray-400" style={{ height: senderHeight, display: 'flex', alignItems: 'flex-end' }}>
           {message.sender}
         </div>
-        <div className={`inline-block px-3 py-2 rounded-lg max-w-[75%] ${
+        <div className={`inline-block px-3 py-2 rounded-lg max-w-full ${
           isUser ? 'bg-green-200' : 'bg-white'
         }`}>
           <div className="text-sm"><MessageContent content={message.content} /></div>

@@ -304,7 +304,7 @@ export default function ChatContainer({
                       }}>
                         <div style={{
                           ...getBubbleStyle(isUser),
-                          maxWidth: '75%',
+                          maxWidth: '100%',
                         }}>
                           {msg.content ? (
                             <MessageContent content={msg.content} />
@@ -379,7 +379,7 @@ export default function ChatContainer({
                   }}>
                     <div style={{
                       ...getBubbleStyle(isUser),
-                      maxWidth: '75%',
+                      maxWidth: '100%',
                     }}>
                       {msg.content ? (
                         <MessageContent content={msg.content} />
