@@ -52,6 +52,9 @@ export default function ChatContainer({
   const scaledHeaderHeight = Math.round((isMobile ? 50 : 40) * effectiveScale);
   const scaledBubbleRadius = Math.max(4, Math.round(styles.bubbleRadius * effectiveScale));
 
+  // 气泡最大宽度 = 100% - 两个头像宽度 - gap
+  const maxBubbleWidth = `calc(100% - ${scaledAvatarSize * 2 + scaledGap * 2}px)`;
+
   const getBubbleStyle = (isUser: boolean): React.CSSProperties => {
     const baseBg = isUser ? styles.bubbleRightBg : styles.bubbleLeftBg;
     const baseColor = isUser ? styles.bubbleRightColor : styles.bubbleLeftColor;
@@ -69,6 +72,7 @@ export default function ChatContainer({
       lineHeight: 1.4,
       display: 'inline-block',
       textAlign: 'left',
+      maxWidth: maxBubbleWidth,
     };
   };
 
@@ -370,10 +374,9 @@ export default function ChatContainer({
                       }}>
                         <div style={{
                           ...getBubbleStyle(isUser),
-                          maxWidth: '100%',
                         }}>
                           {msg.content ? (
-                            <MessageContent content={msg.content} />
+                            <MessageContent message={msg} scale={effectiveScale} />
                           ) : (
                             <span>&nbsp;</span>
                           )}
@@ -438,7 +441,6 @@ export default function ChatContainer({
                     </div>
                   )}
                   <div style={{
-                    flex: 1,
                     display: 'flex',
                     alignItems: 'flex-start',
                     justifyContent: isUser ? 'flex-end' : 'flex-start',
@@ -448,7 +450,7 @@ export default function ChatContainer({
                       maxWidth: '100%',
                     }}>
                       {msg.content ? (
-                        <MessageContent content={msg.content} />
+                        <MessageContent message={msg} scale={effectiveScale} />
                       ) : (
                         <span>&nbsp;</span>
                       )}

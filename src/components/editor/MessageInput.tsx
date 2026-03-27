@@ -1,12 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import EmojiPicker from '@/components/common/EmojiPicker';
+import RedPacketEditor from './RedPacketEditor';
+import TransferEditor from './TransferEditor';
+import ImageEditor from './ImageEditor';
+import VoiceEditor from './VoiceEditor';
 
 export default function MessageInput() {
   const { project, addMessage } = useChatStore();
   const [sender, setSender] = useState(project.users[0]?.name || '');
   const [content, setContent] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showRedPacket, setShowRedPacket] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [showImage, setShowImage] = useState(false);
+  const [showVoice, setShowVoice] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,13 +92,63 @@ export default function MessageInput() {
           提示：输入 [微笑] 等表情代码，或点击表情按钮选择
         </p>
       </div>
-      <button
-        type="submit"
-        disabled={!content.trim()}
-        className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        添加消息
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!content.trim()}
+          className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          添加消息
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowRedPacket(true)}
+          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+        >
+          红包
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowTransfer(true)}
+          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+        >
+          转账
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowImage(true)}
+          className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+        >
+          图片
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowVoice(true)}
+          className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+        >
+          语音
+        </button>
+      </div>
+      
+      <RedPacketEditor 
+        isOpen={showRedPacket} 
+        onClose={() => setShowRedPacket(false)} 
+      />
+      
+      <TransferEditor 
+        isOpen={showTransfer} 
+        onClose={() => setShowTransfer(false)} 
+      />
+      
+      <ImageEditor 
+        isOpen={showImage} 
+        onClose={() => setShowImage(false)} 
+      />
+      
+      <VoiceEditor 
+        isOpen={showVoice} 
+        onClose={() => setShowVoice(false)} 
+      />
     </form>
   );
 }

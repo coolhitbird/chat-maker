@@ -1,7 +1,36 @@
-export type MessageType = 'text' | 'image' | 'voice';
+// 消息类型
+export type MessageType = 'text' | 'redpacket' | 'transfer' | 'voice' | 'image';
 export type UserRole = 'user' | 'assistant';
 export type VideoRatio = '9:16' | '16:9' | '1:1';
 export type EmojiSet = 'native' | 'wechat' | 'qq';
+
+export interface RedPacketData {
+  amount: number; // 红包金额（分）
+  greeting: string; // 祝福语
+  sender: string; // 发送者
+  receiver?: string; // 接收者
+  isOpened: boolean; // 是否已打开
+}
+
+export interface TransferData {
+  amount: number; // 转账金额（分）
+  note?: string; // 转账说明
+  isReceived: boolean; // 是否已收款
+  sender: string; // 发送者
+}
+
+export interface VoiceData {
+  duration: number; // 时长（秒）
+  isPlaying?: boolean; // 是否正在播放
+  text?: string; // 转文字内容（可选）
+}
+
+export interface ImageData {
+  url: string; // 图片URL
+  width?: number; // 图片宽度
+  height?: number; // 图片高度
+  caption?: string; // 图片说明
+}
 
 export interface Message {
   id: string;
@@ -11,6 +40,11 @@ export interface Message {
   content: string;
   type: MessageType;
   timestamp: number;
+  // 扩展数据（根据消息类型不同）
+  redPacket?: RedPacketData;
+  transfer?: TransferData;
+  voice?: VoiceData;
+  image?: ImageData;
 }
 
 export interface UserProfile {

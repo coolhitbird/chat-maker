@@ -12,7 +12,13 @@ const sampleText = `用户A: 你好
 用户A: 对的，最近在做ChatGPT相关的
 用户B: 那个很热门！有什么问题可以问我
 用户A: 好的，谢谢！
-用户B: 不客气，有问题随时问 😊`;
+用户B: 不客气，有问题随时问 😊
+用户A: [红包]恭喜发财，大吉大利
+用户B: [转账]500元
+用户A: [语音]
+用户B: [语音 10秒]
+用户A: [图片]
+用户B: [图片 风景]`;
 
 export default function TextImporter() {
   const { project, setMessages, addUser } = useChatStore();

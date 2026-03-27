@@ -47,13 +47,33 @@ function parseLine(line: string): ParsedLine | null {
     return { sender: '', content: trimmedLine, isContinuation: true };
   }
 
+  // 特殊处理：特殊消息格式不是发送者（如 [红包]、[转账]、[语音]、[图片]）
+  const specialFormats = ['[红包]', '[转账]', '[语音', '[图片]'];
+  for (const format of specialFormats) {
+    if (trimmedLine.startsWith(format)) {
+      // 特殊消息格式作为延续内容
+      return { sender: '', content: trimmedLine, isContinuation: true };
+    }
+  }
+
   // 检查是否是发送者行
   for (const { regex, extract } of senderPatterns) {
     const match = trimmedLine.match(regex);
     if (match) {
+      const result = extract(match);
+      // 再次检查提取的内容是否是特殊消息格式
+      const isSpecial = specialFormats.some(format => result.content.startsWith(format));
+      if (isSpecial) {
+        // 如果是特殊消息格式，把整个行作为消息内容
+        return { 
+          sender: result.sender, 
+          content: trimmedLine.replace(new RegExp(`^${result.sender}[:：]\\s*`), '').trim(),
+          isContinuation: false 
+        };
+      }
       return { 
-        sender: extract(match).sender, 
-        content: extract(match).content, 
+        sender: result.sender, 
+        content: result.content, 
         isContinuation: false 
       };
     }
@@ -163,6 +183,15 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
   // 生成消息
   for (const line of mergedLines) {
     const parsed = parseLine(line);
+    
+    // DEBUG: 检查解析结果
+    console.log('[Parser] 解析行:', {
+      line: line,
+      parsed: parsed,
+      hasContent: parsed?.content ? true : false,
+      hasSender: parsed?.sender ? true : false
+    });
+    
     if (!parsed || !parsed.content || !parsed.sender) continue;
 
     const sender = parsed.sender;
@@ -177,14 +206,97 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
     const finalSender = matchedUser?.name || sender;
     const finalRole = matchedUser?.role || role;
 
+    // 检查是否是特殊消息
+    let messageType: 'text' | 'redpacket' | 'transfer' | 'voice' | 'image' = 'text';
+    let redPacketData = undefined;
+    let transferData = undefined;
+    let voiceData = undefined;
+    let imageData = undefined;
+    let messageContent = parsed.content;
+
+    // 红包消息
+    if (parsed.content.startsWith('[红包]')) {
+      messageType = 'redpacket';
+      const content = parsed.content.replace('[红包]', '').trim();
+      // 检查是否包含"已领"状态
+      const isOpened = content.includes('已领');
+      const greeting = content.replace('已领', '').trim() || '恭喜发财，大吉大利';
+      messageContent = greeting;
+      redPacketData = {
+        amount: 200, // 默认2元
+        greeting: greeting,
+        sender: finalSender,
+        isOpened: isOpened,
+      };
+    }
+    // 转账消息
+    else if (parsed.content.startsWith('[转账]')) {
+      messageType = 'transfer';
+      const content = parsed.content.replace('[转账]', '').trim();
+      // 检查是否包含"已收"状态
+      const isReceived = content.includes('已收');
+      const cleanContent = content.replace('已收', '').trim();
+      const amountMatch = cleanContent.match(/¥?(\d+\.?\d*)/);
+      const amount = amountMatch ? parseFloat(amountMatch[1]) * 100 : 1000; // 默认10元
+      const note = cleanContent.replace(/¥?\d+\.?\d*元?/, '').trim();
+      messageContent = `转账 ¥${(amount / 100).toFixed(2)}`;
+      transferData = {
+        amount: amount,
+        note: note || undefined,
+        isReceived: isReceived,
+        sender: finalSender,
+      };
+    }
+    // 语音消息
+    else if (parsed.content.startsWith('[语音')) {
+      messageType = 'voice';
+      const original = parsed.content;
+      
+      // 解析格式：[语音 10秒]转文字内容
+      // 或：[语音]转文字内容
+      const durationMatch = original.match(/\[语音\s*(\d+)(秒|s)?\]/);
+      const duration = durationMatch ? parseInt(durationMatch[1]) : 5; // 默认5秒
+      
+      // 提取文字内容（删除 [语音...] 标签）
+      const text = original.replace(/\[语音.*?\]/, '').trim();
+      
+      // DEBUG
+      console.log('[Parser] 语音消息解析:', {
+        original: original,
+        durationMatch: durationMatch?.[0],
+        duration: duration,
+        text: text
+      });
+      
+      messageContent = text || `[语音 ${duration}"]'`;
+      voiceData = {
+        duration: duration,
+        text: text || undefined,
+      };
+    }
+    // 图片消息
+    else if (parsed.content.startsWith('[图片]')) {
+      messageType = 'image';
+      const caption = parsed.content.replace('[图片]', '').trim();
+      messageContent = caption || '[图片]';
+      imageData = {
+        url: '',
+        caption: caption || undefined,
+      };
+    }
+
     messages.push({
       id: crypto.randomUUID(),
       role: finalRole,
       sender: finalSender,
       avatar: matchedUser?.avatar || generateAvatar(finalSender),
-      content: parsed.content,
-      type: 'text',
+      content: messageContent,
+      type: messageType,
       timestamp: Date.now() + messages.length * 1000,
+      redPacket: redPacketData,
+      transfer: transferData,
+      voice: voiceData,
+      image: imageData,
     });
   }
 
@@ -204,6 +316,10 @@ export function testParse(text: string): { success: boolean; lines: Array<{ send
   
   for (const line of mergedLines) {
     const parsed = parseLine(line);
+    
+    // DEBUG
+    console.log(`[Parser] 解析行: "${line}" →`, parsed);
+    
     if (parsed && parsed.sender) {
       results.push({ sender: parsed.sender, content: parsed.content });
     } else {
@@ -215,4 +331,10 @@ export function testParse(text: string): { success: boolean; lines: Array<{ send
     success: results.every(r => r.sender !== '(未识别)'),
     lines: results
   };
+}
+
+export function testVoiceParse(text: string): void {
+  console.log('[Test] 语音解析测试:', text);
+  const parsed = parseLine(text);
+  console.log('[Test] 解析结果:', parsed);
 }

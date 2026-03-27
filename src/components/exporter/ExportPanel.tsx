@@ -50,11 +50,14 @@ export default function ExportPanel() {
     try {
       const exporter = new Exporter();
       setStatus('正在生成图片...');
-      setExportProgress(30);
+      setExportProgress(10);
 
       const title = project.chatTitle || platform.name;
 
-      setExportProgress(60);
+      // =========================================================================
+      // 直接用 Canvas 渲染器导出，保证布局正确
+      // =========================================================================
+      setExportProgress(50);
       const blob = await exporter.captureImageFromCanvas(
         messages,
         platform.styles,
