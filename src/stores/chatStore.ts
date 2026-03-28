@@ -28,6 +28,12 @@ const defaultUsers: UserProfile[] = [
   },
 ];
 
+export interface ExportableProject {
+  version: string;
+  exportedAt: string;
+  project: Omit<ChatProject, 'id'>;
+}
+
 interface ChatState {
   project: ChatProject;
   selectedPlatform: PlatformTheme;
@@ -66,6 +72,10 @@ interface ChatState {
   updateChatTitle: (title: string) => void;
   setChatType: (type: ChatType) => void;
   updateGroupInfo: (info: Partial<GroupInfo>) => void;
+  
+  exportProject: () => ExportableProject;
+  importProject: (data: ExportableProject) => void;
+  setProject: (project: ChatProject) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -327,4 +337,28 @@ export const useChatStore = create<ChatState>((set) => ({
         },
       },
     })),
+
+  exportProject: () => {
+    const state = useChatStore.getState() as ChatState;
+    const { id, ...projectData } = state.project;
+    return {
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      project: projectData,
+    };
+  },
+
+  importProject: (data) => {
+    if (!data.project) {
+      throw new Error('无效的项目数据');
+    }
+    set({
+      project: {
+        ...data.project,
+        id: nanoid(),
+      },
+    });
+  },
+
+  setProject: (project) => set({ project }),
 }));

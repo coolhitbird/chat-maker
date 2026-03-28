@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useChatStore } from '@/stores/chatStore';
+import { useState, useRef } from 'react';
+import { useChatStore, ExportableProject } from '@/stores/chatStore';
 import MessageList from '@/components/editor/MessageList';
 import MessageInput from '@/components/editor/MessageInput';
 import TextImporter from '@/components/editor/TextImporter';
@@ -8,7 +8,54 @@ import Preview from '@/components/preview/Preview';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
-  const { project, updateChatTitle } = useChatStore();
+  const [importStatus, setImportStatus] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { project, updateChatTitle, exportProject, importProject } = useChatStore();
+
+  const handleExport = () => {
+    const data = exportProject();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-project-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const data = JSON.parse(content) as ExportableProject;
+        
+        if (!data.version || !data.project) {
+          throw new Error('无效的项目文件格式');
+        }
+
+        importProject(data);
+        setImportStatus('导入成功！');
+        setTimeout(() => setImportStatus(''), 3000);
+      } catch (err) {
+        setImportStatus('导入失败：' + (err as Error).message);
+        setTimeout(() => setImportStatus(''), 5000);
+      }
+    };
+    reader.readAsText(file);
+    
+    e.target.value = '';
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -75,6 +122,34 @@ function App() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleExport}
+                      className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
+                    >
+                      导出项目
+                    </button>
+                    <button
+                      onClick={handleImportClick}
+                      className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                    >
+                      导入项目
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
+                  {importStatus && (
+                    <div className={`text-sm text-center py-2 rounded ${
+                      importStatus.includes('成功') ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                    }`}>
+                      {importStatus}
+                    </div>
+                  )}
                   <button
                     onClick={() => useChatStore.getState().clearMessages()}
                     className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"

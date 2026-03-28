@@ -339,6 +339,14 @@ export class Exporter {
     const canvas = document.createElement('canvas');
     const { renderChatToCanvas, canvasToBlob: canvasToBlobUtil } = await import('./canvasRenderer');
     
+    console.log('[Exporter] captureImageFromCanvas called with:', {
+      messageCount: messages.length,
+      width,
+      height,
+      title,
+      styles: { ...styles, background: styles.background, bubblePadding: styles.bubblePadding }
+    });
+    
     renderChatToCanvas(canvas, {
       width,
       height,
