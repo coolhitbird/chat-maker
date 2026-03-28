@@ -94,13 +94,13 @@ function measureTextWidth(ctx: CanvasRenderingContext2D, text: string): number {
 }
 
 // 计算单行文本的行数（用于语音转文字等场景）
-function countTextLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number): number {
+function countTextLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number, fontFamily: string): number {
   if (!text) return 1;
   let lineCount = 1;
   let currentLineWidth = 0;
   
+  ctx.font = `${fontSize}px "${fontFamily}"`;
   for (const char of text) {
-    ctx.font = `${fontSize}px Arial`;
     const charWidth = measureTextWidth(ctx, char);
     if (currentLineWidth + charWidth > maxWidth && currentLineWidth > 0) {
       lineCount++;
@@ -330,9 +330,9 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const voiceBubbleWidth = Math.min(voiceMinWidth + bubblePaddingH * 2, maxBubbleWidth);
       const voiceTextMaxWidth = voiceBubbleWidth - bubblePaddingH * 4;
       
-      // 使用统一的函数计算行数（使用与渲染相同的 fontSize 和 lineHeightRatio）
+      // 使用统一的函数计算行数（使用与渲染相同的 fontSize、lineHeightRatio 和 fontFamily）
       const voiceLineHeight = fontSize * lineHeightRatio;
-      const voiceLineCount = countTextLines(ctx, voiceText, voiceTextMaxWidth, fontSize);
+      const voiceLineCount = countTextLines(ctx, voiceText, voiceTextMaxWidth, fontSize, styles.fontFamily);
       
       // 文字区域高度 = 行数 * 行高（无额外 padding，更紧凑）
       const voiceTextAreaHeight = voiceLineCount * voiceLineHeight;
@@ -346,12 +346,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     totalContentHeight += rowHeight;
   }
   
-  console.log('[PRE-END] messageData voice bubbleHeights:', 
-    messageData
-      .filter(d => d.msg.type === 'voice' && d.msg.voice && d.msg.voice.text)
-      .map(d => ({ text: d.msg.voice?.text?.substring(0, 20), bubbleHeight: d.bubbleHeight, voiceTextLineCount: d.voiceTextLineCount }))
-  );
-
   const actualHeight = Math.max(height, statusBarHeight + headerHeight + totalContentHeight + contentPadding);
 
   // Handle HiDPI/Retina scaling
