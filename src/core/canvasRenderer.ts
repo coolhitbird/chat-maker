@@ -506,8 +506,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const voiceMinWidth = msg.type === 'voice' ? Math.min(200, (msg.voice?.duration || 5) * 20 + 100) : 0;
     // 图片消息的固定宽度（正方形）
     const imageWidth = msg.type === 'image' ? 200 : 0;
-    // 普通文字消息的最小宽度（与语音消息保持一致）
-    const textMinWidth = 120;
     
     let actualMaxLineWidth: number;
     if (msg.type === 'redpacket') {
@@ -522,8 +520,8 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       // 图片消息使用固定宽度
       actualMaxLineWidth = imageWidth;
     } else {
-      // 普通文字消息：内容宽度与最小宽度取较大值
-      actualMaxLineWidth = Math.max(maxLineWidth, textMinWidth);
+      // 普通文字消息：使用内容宽度
+      actualMaxLineWidth = maxLineWidth;
     }
     
     const bubbleWidth = Math.min(actualMaxLineWidth + bubblePaddingH * 2, maxBubbleWidth);
