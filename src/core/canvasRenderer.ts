@@ -179,6 +179,8 @@ export interface RenderOptions {
   scale?: number;
   /** 预加载好的 emoji 图片缓存（由调用方同步预加载后传入）*/
   emojiCache?: Map<string, HTMLImageElement>;
+  /** 预加载好的消息图片缓存（由调用方异步预加载后传入）*/
+  imageCache?: Map<string, HTMLImageElement>;
 }
 
 /** 同步预加载一组图片（通过 XHR），返回 Map */
@@ -235,27 +237,13 @@ function getGlobalEmojiCache(): Map<string, HTMLImageElement> {
 }
 
 export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOptions): void {
-  const { width, height, styles, title, messages, users, emojiCache } = options;
+  const { width, height, styles, title, messages, users, emojiCache, imageCache } = options;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  console.log('[Canvas] renderChatToCanvas called:', {
-    width,
-    height,
-    title,
-    messageCount: messages.length,
-    styles: {
-      fontSize: styles.fontSize,
-      avatarSize: styles.avatarSize,
-      bubblePadding: styles.bubblePadding,
-      background: styles.background,
-      bubbleRightBg: styles.bubbleRightBg,
-      bubbleLeftBg: styles.bubbleLeftBg
-    }
-  });
-
   // 使用传入的缓存或全局缓存
-  const imgCache = emojiCache ?? getGlobalEmojiCache();
+  const emojiImgCache = emojiCache ?? getGlobalEmojiCache();
+  const msgImageCache = imageCache ?? new Map<string, HTMLImageElement>();
 
   const userAvatarMap = new Map<string, string>();
   users.forEach(u => userAvatarMap.set(u.name, u.avatar));
@@ -712,9 +700,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const textLineHeight = fontSize * lineHeightRatio;
       const textMaxWidth = bubbleWidth - padding * 4;
       
-      // 直接使用预计算的行数（确保与预计算一致）
-      const renderLineCount = data.voiceTextLineCount || 1;
-      
       // 生成波形数据
       const waveformData: number[] = [];
       for (let i = 0; i < waveCount; i++) {
@@ -797,9 +782,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const imgSize = bubbleWidth - imgPadding * 2; // 正方形图片大小
       const imgBubbleHeight = imgSize; // 图片气泡高度等于图片大小
       
-      // DEBUG: 检查图片消息的尺寸
-      console.log(`[Canvas] 图片消息: bubbleWidth=${bubbleWidth}, bubbleHeight=${bubbleHeight}, imgSize=${imgSize}, imgBubbleHeight=${imgBubbleHeight}, url=${msg.image.url ? '有' : '无'}`);
-      
       // 使用 ctx.save 和 ctx.clip 裁剪图片区域
       ctx.save();
       
@@ -823,12 +805,17 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       
       // 绘制图片（如果有URL）
       if (msg.image.url) {
-        try {
-          // 创建临时图片对象
+        // 优先使用缓存的图片
+        const cachedImg = msgImageCache.get(msg.image.url);
+        
+        if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+          ctx.drawImage(cachedImg, bubbleX + imgPadding, bubbleY + imgPadding, imgSize, imgSize);
+        } else {
+          // 尝试直接加载
           const tempImg = new Image();
+          tempImg.crossOrigin = 'anonymous';
           tempImg.src = msg.image.url;
           
-          // 如果图片已加载，直接绘制（填满整个正方形区域）
           if (tempImg.complete && tempImg.naturalWidth > 0) {
             ctx.drawImage(tempImg, bubbleX + imgPadding, bubbleY + imgPadding, imgSize, imgSize);
           } else {
@@ -842,12 +829,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
             ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, 8, 0, Math.PI * 2);
             ctx.fill();
           }
-        } catch {
-          // 加载失败，显示占位符
-          ctx.fillStyle = '#ccc';
-          ctx.beginPath();
-          ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, 12, 0, Math.PI * 2);
-          ctx.fill();
         }
       } else {
         // 没有图片URL，显示图片图标
@@ -882,7 +863,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
         for (const frag of lines[li]) {
           if (frag.type === 'emoji') {
             // Draw emoji image - 垂直居中于文字行
-            const cachedImg = imgCache.get(frag.emojiUrl!);
+            const cachedImg = emojiImgCache.get(frag.emojiUrl!);
             if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
               const emojiY = lineY + (lineHeightPx - emojiSize) / 2; // 垂直居中
               ctx.drawImage(cachedImg, bubbleX + bubblePaddingH + xOffset, emojiY, emojiSize, emojiSize);

@@ -382,97 +382,114 @@ export class Exporter {
     }
 
     const ffmpeg = this.ffmpeg!;
-    const { fps, messageInterval, width, height } = settings;
+    const { fps, width, height } = settings;
     const { styles } = platformConfig;
 
     onProgress(5);
 
+    // 预加载所有图片消息
+    const imageUrls = messages
+      .filter(m => m.type === 'image' && m.image?.url)
+      .map(m => m.image!.url!);
+    
+    const imageCache = new Map<string, HTMLImageElement>();
+    await Promise.all(imageUrls.map(url => {
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          imageCache.set(url, img);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = url;
+      });
+    }));
+
+    const { renderChatToCanvas, canvasToBlob: canvasToBlobUtil } = await import('./canvasRenderer');
+    await document.fonts.ready;
+
+    const dpr = window.devicePixelRatio || 1;
+    const framesPerMessage = fps;
+    const finalFramePause = fps * 2;
+
     let frameIndex = 0;
 
-    const headerHeight = styles.avatarSize + 8;
-    const chatHtml = `
-      <div style="width: ${width}px; height: ${height}px; background-color: ${styles.background}; display: flex; flex-direction: column; overflow: hidden; font-family: ${styles.fontFamily};">
-        <div style="height: ${headerHeight}px; background-color: ${styles.headerBg}; color: ${styles.headerColor}; display: flex; align-items: center; justify-content: center; font-size: ${styles.fontSize}px; font-weight: 500;">
-          ${escapeHtml(platformConfig.name)} 聊天
-        </div>
-        <div id="chat-body" style="flex: 1; overflow-y: auto; padding: ${styles.messageGap}px; background-color: ${styles.background};">
-        </div>
-      </div>
-    `;
-
-    const previewWindow = window.open('', '_blank', `width=${width + 50},height=${height + 100},left=0,top=0`) as Window & {
-      document: Document & { getElementById: (id: string) => HTMLElement | null; write: (html: string) => void; close: () => void };
-    };
-    if (!previewWindow) {
-      throw new Error('无法打开预览窗口，请允许弹出窗口');
-    }
-
-    previewWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          html, body { width: ${width}px; height: ${height}px; overflow: hidden; }
-        </style>
-      </head>
-      <body>${chatHtml}</body>
-      </html>
-    `);
-    previewWindow.document.close();
-
-    await document.fonts.ready;
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const captureFrame = async () => {
-      const canvas = await html2canvas(previewWindow.document.body, {
-        scale: 1,
+    for (let i = 0; i < messages.length; i++) {
+      const canvas = document.createElement('canvas');
+      renderChatToCanvas(canvas, {
         width,
         height,
-        useCORS: true,
-        backgroundColor: styles.background,
-        logging: false,
+        styles,
+        title: platformConfig.name,
+        messages: messages.slice(0, i + 1),
+        users: [],
+        imageCache,
       });
 
-      const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, 'image/png');
-      });
+      const totalContentHeight = canvas.height / dpr;
 
-      if (blob) {
-        const filename = `frame${String(frameIndex).padStart(5, '0')}.png`;
-        const arrayBuffer = await blob.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        await ffmpeg.writeFile(filename, uint8Array);
-        frameIndex++;
-      }
-    };
-
-    for (let i = 0; i < messages.length; i++) {
-      const body = previewWindow.document.getElementById('chat-body');
-      if (body) {
-        const msgHtml = getMessageHtml(messages[i], i, platformConfig, new Map());
-        body.insertAdjacentHTML('beforeend', msgHtml);
-        body.scrollTop = body.scrollHeight;
-      }
-
-      const framesPerMessage = Math.round((messageInterval / 1000) * fps);
       for (let f = 0; f < framesPerMessage; f++) {
-        await captureFrame();
-        await new Promise(resolve => setTimeout(resolve, 1000 / fps));
+        const targetCanvas = document.createElement('canvas');
+        targetCanvas.width = width * dpr;
+        targetCanvas.height = height * dpr;
+
+        const targetCtx = targetCanvas.getContext('2d');
+        if (!targetCtx) continue;
+        targetCtx.scale(dpr, dpr);
+
+        targetCtx.fillStyle = styles.background;
+        targetCtx.fillRect(0, 0, width, height);
+
+        if (totalContentHeight > height) {
+          const scrollY = totalContentHeight - height;
+          targetCtx.drawImage(
+            canvas,
+            0, scrollY * dpr, width * dpr, height * dpr,
+            0, 0, width, height
+          );
+        } else {
+          targetCtx.drawImage(canvas, 0, 0, width, totalContentHeight);
+        }
+
+        const blob = await new Promise<Blob | null>((resolve) => {
+          targetCanvas.toBlob(resolve, 'image/png');
+        });
+
+        if (blob) {
+          const filename = `frame${String(frameIndex).padStart(5, '0')}.png`;
+          const arrayBuffer = await blob.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          await ffmpeg.writeFile(filename, uint8Array);
+          frameIndex++;
+        }
       }
 
       const progress = 5 + Math.round(((i + 1) / messages.length) * 75);
       onProgress(Math.min(progress, 80));
     }
 
-    // Pause on final frame
-    for (let i = 0; i < fps * 2; i++) {
-      await captureFrame();
-      await new Promise(resolve => setTimeout(resolve, 1000 / fps));
+    // 最后一条消息额外停留
+    for (let e = 0; e < finalFramePause; e++) {
+      const pauseCanvas = document.createElement('canvas');
+      renderChatToCanvas(pauseCanvas, {
+        width,
+        height,
+        styles,
+        title: platformConfig.name,
+        messages,
+        users: [],
+        imageCache,
+      });
+      
+      const pauseBlob = await canvasToBlobUtil(pauseCanvas);
+      const pauseArrayBuffer = await pauseBlob.arrayBuffer();
+      const pauseData = new Uint8Array(pauseArrayBuffer);
+      
+      const pauseFilename = `frame${String(frameIndex).padStart(5, '0')}.png`;
+      await ffmpeg.writeFile(pauseFilename, pauseData);
+      frameIndex++;
     }
-
-    previewWindow.close();
 
     onProgress(85);
 
