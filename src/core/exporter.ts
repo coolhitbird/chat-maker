@@ -339,14 +339,6 @@ export class Exporter {
     const canvas = document.createElement('canvas');
     const { renderChatToCanvas, canvasToBlob: canvasToBlobUtil } = await import('./canvasRenderer');
     
-    console.log('[Exporter] captureImageFromCanvas called with:', {
-      messageCount: messages.length,
-      width,
-      height,
-      title,
-      styles: { ...styles, background: styles.background, bubblePadding: styles.bubblePadding }
-    });
-    
     renderChatToCanvas(canvas, {
       width,
       height,
@@ -501,6 +493,117 @@ export class Exporter {
       throw new Error('读取输出文件失败');
     }
 
+    for (let i = 0; i < frameIndex; i++) {
+      const filename = `frame${String(i).padStart(5, '0')}.png`;
+      await ffmpeg.deleteFile(filename).catch(() => {});
+    }
+    await ffmpeg.deleteFile('output.mp4').catch(() => {});
+
+    onProgress(100);
+
+    return new Blob([data as unknown as BlobPart], { type: 'video/mp4' });
+  }
+
+  // ============================================================================
+  // Canvas-based 视频录制（方案 A）
+  // 不需要弹出窗口，直接使用 Canvas 渲染
+  // ============================================================================
+  async recordVideoWithCanvas(
+    messages: Message[],
+    styles: ThemeStyles,
+    width: number,
+    height: number,
+    title: string,
+    users: UserProfile[],
+    settings: ExportSettings,
+    onProgress: (progress: number) => void
+  ): Promise<Blob> {
+    if (!this.ffmpeg || !this.loaded) {
+      await this.init();
+    }
+
+    const ffmpeg = this.ffmpeg!;
+    const { fps } = settings;
+
+    onProgress(5);
+
+    // 动态导入 Canvas 渲染器
+    const { renderChatToCanvas, canvasToBlob: canvasToBlobUtil } = await import('./canvasRenderer');
+    
+    // 创建离屏 Canvas
+    const canvas = document.createElement('canvas');
+    
+    let frameIndex = 0;
+
+    // 最后一帧停留的额外帧数
+    const finalFramePause = fps * 2;
+
+    for (let i = 0; i < messages.length; i++) {
+      // 渲染包含前 i+1 条消息的 Canvas
+      renderChatToCanvas(canvas, {
+        width,
+        height,
+        styles,
+        title,
+        messages,
+        users,
+        maxMessages: i + 1,
+      });
+
+      // 等待字体加载
+      await document.fonts.ready;
+      
+      // 将当前 Canvas 保存为帧
+      const blob = await canvasToBlobUtil(canvas);
+      const filename = `frame${String(frameIndex).padStart(5, '0')}.png`;
+      const arrayBuffer = await blob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      await ffmpeg.writeFile(filename, uint8Array);
+      frameIndex++;
+
+      // 如果是当前最后一条消息，额外停留
+      const extraFrames = (i === messages.length - 1) ? finalFramePause : 0;
+      
+      // 复制当前帧作为额外停留帧
+      for (let e = 0; e < extraFrames; e++) {
+        const pauseFilename = `frame${String(frameIndex).padStart(5, '0')}.png`;
+        await ffmpeg.writeFile(pauseFilename, uint8Array);
+        frameIndex++;
+      }
+
+      const progress = 5 + Math.round(((i + 1) / messages.length) * 75);
+      onProgress(Math.min(progress, 80));
+    }
+
+    onProgress(85);
+
+    // 使用 FFmpeg 合成视频
+    try {
+      await ffmpeg.exec([
+        '-framerate', String(fps),
+        '-i', 'frame%05d.png',
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        '-preset', 'fast',
+        '-y',
+        'output.mp4'
+      ]);
+    } catch (e) {
+      console.error('FFmpeg exec error:', e);
+      throw new Error('视频合成失败: ' + (e as Error).message);
+    }
+
+    onProgress(95);
+
+    let data: Uint8Array;
+    try {
+      data = await ffmpeg.readFile('output.mp4') as Uint8Array;
+    } catch (e) {
+      console.error('Read file error:', e);
+      throw new Error('读取输出文件失败');
+    }
+
+    // 清理临时文件
     for (let i = 0; i < frameIndex; i++) {
       const filename = `frame${String(i).padStart(5, '0')}.png`;
       await ffmpeg.deleteFile(filename).catch(() => {});

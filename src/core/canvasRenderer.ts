@@ -177,6 +177,8 @@ export interface RenderOptions {
   messages: Message[];
   users: UserProfile[];
   scale?: number;
+  /** 最多渲染的消息数量（用于视频导出，逐帧增加）*/
+  maxMessages?: number;
   /** 预加载好的 emoji 图片缓存（由调用方同步预加载后传入）*/
   emojiCache?: Map<string, HTMLImageElement>;
 }
@@ -235,24 +237,12 @@ function getGlobalEmojiCache(): Map<string, HTMLImageElement> {
 }
 
 export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOptions): void {
-  const { width, height, styles, title, messages, users, emojiCache } = options;
+  const { width, height, styles, title, messages, users, emojiCache, maxMessages } = options;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  console.log('[Canvas] renderChatToCanvas called:', {
-    width,
-    height,
-    title,
-    messageCount: messages.length,
-    styles: {
-      fontSize: styles.fontSize,
-      avatarSize: styles.avatarSize,
-      bubblePadding: styles.bubblePadding,
-      background: styles.background,
-      bubbleRightBg: styles.bubbleRightBg,
-      bubbleLeftBg: styles.bubbleLeftBg
-    }
-  });
+  // 如果指定了 maxMessages，只渲染前 N 条消息（用于视频导出）
+  const visibleMessages = maxMessages ? messages.slice(0, maxMessages) : messages;
 
   // 使用传入的缓存或全局缓存
   const imgCache = emojiCache ?? getGlobalEmojiCache();
@@ -272,9 +262,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const lineHeightRatio = 1.4;
   const contentPadding = styles.messageGap;
 
-  // DEBUG: 检查 fontSize
-  console.log(`[Canvas] fontSize: ${fontSize}, width: ${width}, avatarSize: ${avatarSize}`);
-  
   // Emoji size = 1.2x font size (微信表情实际比例)
   const emojiSize = Math.round(fontSize * 1.2);
 
@@ -292,7 +279,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   // 红包消息的固定高度（主体区域70px + 底部32px）
   const redPacketHeight = 102;
   
-  const messageData = messages.map(msg => {
+  const messageData = visibleMessages.map(msg => {
     const fragments = parseFragments(msg.content);
     const lines = wrapTextFragments(ctx, fragments, maxBubbleWidth - bubblePaddingH * 2, emojiSize);
     const lineHeightPx = fontSize * lineHeightRatio;
@@ -530,11 +517,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       : avatarX + gap + avatarSize;
     // 气泡从用户名下方开始（y + senderNameHeightPx）
     const bubbleY = y + senderNameHeightPx;
-    
-    // DEBUG: 语音消息的宽度计算
-    if (msg.type === 'voice' && msg.voice) {
-      console.log(`[RENDER-VOICE] actualMaxLineWidth=${actualMaxLineWidth}, bubblePaddingH=${bubblePaddingH}, bubbleWidth=${bubbleWidth}, maxBubbleWidth=${maxBubbleWidth}`);
-    }
 
     // ============================================================================
     // 核心修复 3: 添加 clip() 防止文字溢出（仅对普通文字消息）
@@ -550,9 +532,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
 
     // 检查是否为红包消息
     if (msg.type === 'redpacket' && msg.redPacket) {
-      // DEBUG: 检查绘制位置
-      console.log(`[Canvas] 红包消息绘制位置: bubbleX=${bubbleX}, bubbleY=${bubbleY}, bubbleWidth=${bubbleWidth}, bubbleHeight=${bubbleHeight}`);
-      
       // 绘制红包消息（使用样式配置）
       drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius, '#fff');
       const redPacket = msg.redPacket;
@@ -629,9 +608,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + (s.footer?.height || 32) / 2);
       
     } else if (msg.type === 'transfer' && msg.transfer) {
-      // DEBUG: 检查绘制位置
-      console.log(`[Canvas] 转账消息绘制位置: bubbleX=${bubbleX}, bubbleY=${bubbleY}, bubbleWidth=${bubbleWidth}, bubbleHeight=${bubbleHeight}`);
-      
       // 绘制转账消息
       const transfer = msg.transfer;
       const s: MessageStyleConfig = getRedPacketStyle('wechat'); // 使用样式配置
@@ -711,9 +687,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const waveAreaHeight = 40; // 波形区域高度（图标16 + padding 上下各 8）
       const textLineHeight = fontSize * lineHeightRatio;
       const textMaxWidth = bubbleWidth - padding * 4;
-      
-      // 直接使用预计算的行数（确保与预计算一致）
-      const renderLineCount = data.voiceTextLineCount || 1;
       
       // 生成波形数据
       const waveformData: number[] = [];
@@ -796,9 +769,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const imgPadding = 4;
       const imgSize = bubbleWidth - imgPadding * 2; // 正方形图片大小
       const imgBubbleHeight = imgSize; // 图片气泡高度等于图片大小
-      
-      // DEBUG: 检查图片消息的尺寸
-      console.log(`[Canvas] 图片消息: bubbleWidth=${bubbleWidth}, bubbleHeight=${bubbleHeight}, imgSize=${imgSize}, imgBubbleHeight=${imgBubbleHeight}, url=${msg.image.url ? '有' : '无'}`);
       
       // 使用 ctx.save 和 ctx.clip 裁剪图片区域
       ctx.save();

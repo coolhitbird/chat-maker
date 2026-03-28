@@ -5,9 +5,8 @@ import { getPlatformConfig } from '@/themes/wechat';
 import ChatContainer from '@/components/preview/ChatContainer';
 
 export default function ExportPanel() {
-  const { project, isExporting, setIsExporting, setExportProgress, setExportingVideoVisibleCount } = useChatStore();
+  const { project, isExporting, setIsExporting, setExportProgress } = useChatStore();
   const { messages, settings, platform, users } = project;
-  const { styles } = platform;
   const [exportType, setExportType] = useState<'image' | 'video'>('image');
   const [status, setStatus] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -141,40 +140,22 @@ export default function ExportPanel() {
       setStatus('正在加载 FFmpeg...');
       await exporter.init();
 
-      const platformConfig = { name: platform.name, styles: platform.styles };
-      let frameIndex = 0;
-      const { fps, messageInterval } = settings;
-
       setStatus('正在录制视频帧...');
 
-      for (let i = 0; i < messages.length; i++) {
-        setExportingVideoVisibleCount(i + 1);
-        setExportProgress(10 + Math.round(((i + 1) / messages.length) * 70));
-        
-        const visibleMessages = messages.slice(0, i + 1);
-        const html = generateChatHtml(visibleMessages, platformConfig, settings.width, settings.height, project.chatTitle, users);
-        
-        await new Promise(resolve => setTimeout(resolve, messageInterval));
-
-        const blob = await exporter.captureFrameFromHtml(html, settings.width, settings.height, styles.background);
-        await exporter.captureAndSaveFrame(blob, frameIndex);
-        frameIndex++;
-      }
-
-      const finalHtml = generateChatHtml(messages, platformConfig, settings.width, settings.height, project.chatTitle, users);
-      for (let i = 0; i < fps; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1000 / fps));
-        const blob = await exporter.captureFrameFromHtml(finalHtml, settings.width, settings.height, styles.background);
-        await exporter.captureAndSaveFrame(blob, frameIndex);
-        frameIndex++;
-      }
-
-      setStatus('正在合成视频...');
-      setExportProgress(85);
-      
-      const videoBlob = await exporter.compileVideo(frameIndex, fps);
+      const videoBlob = await exporter.recordVideoWithCanvas(
+        messages,
+        platform.styles,
+        settings.width,
+        settings.height,
+        project.chatTitle || platform.name,
+        users,
+        settings,
+        (progress) => setExportProgress(progress)
+      );
       
       setStatus('正在下载...');
+      setExportProgress(95);
+      
       const url = URL.createObjectURL(videoBlob);
       const a = document.createElement('a');
       a.href = url;
