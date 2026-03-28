@@ -1,6 +1,7 @@
 // 消息类型
-export type MessageType = 'text' | 'redpacket' | 'transfer' | 'voice' | 'image';
+export type MessageType = 'text' | 'redpacket' | 'transfer' | 'voice' | 'image' | 'timestamp' | 'system' | 'file';
 export type UserRole = 'user' | 'assistant';
+export type ChatType = 'private' | 'group'; // 私聊 / 群聊
 export type VideoRatio = '9:16' | '16:9' | '1:1';
 export type EmojiSet = 'native' | 'wechat' | 'qq';
 
@@ -32,6 +33,22 @@ export interface ImageData {
   caption?: string; // 图片说明
 }
 
+export interface TimestampData {
+  text: string; // 时间文本，如 "昨天 10:30"、"2024-01-15 14:30"
+}
+
+export interface SystemData {
+  text: string; // 系统消息文本，如 "XXX 撤回了一条消息"
+  type?: 'info' | 'warning' | 'notification' | 'recall' | 'pat' | 'addFriend' | 'invite'; // 消息类型
+}
+
+export interface FileData {
+  name: string; // 文件名
+  size: string; // 文件大小，如 "2.5 MB"
+  type?: string; // 文件类型，如 "PDF"、"DOCX"
+  url?: string; // 文件URL（可选）
+}
+
 export interface Message {
   id: string;
   role: UserRole;
@@ -45,6 +62,11 @@ export interface Message {
   transfer?: TransferData;
   voice?: VoiceData;
   image?: ImageData;
+  timestampData?: TimestampData;
+  system?: SystemData;
+  file?: FileData;
+  // 打字动画支持
+  typingCharCount?: number; // 当前显示到第几个字符（undefined 或 >= content.length 表示完整显示）
 }
 
 export interface UserProfile {
@@ -94,10 +116,19 @@ export interface ExportSettings {
   scrollEnabled: boolean;
 }
 
+export interface GroupInfo {
+  name: string; // 群名称
+  avatar?: string; // 群头像（可选）
+  memberCount?: number; // 成员人数
+  onlineCount?: number; // 在线人数
+}
+
 export interface ChatProject {
   id: string;
   name: string;
   chatTitle: string;
+  chatType: ChatType; // 私聊或群聊
+  groupInfo?: GroupInfo; // 群聊信息（仅群聊时使用）
   platform: PlatformTheme;
   users: UserProfile[];
   messages: Message[];

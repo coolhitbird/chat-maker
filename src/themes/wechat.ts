@@ -1,4 +1,11 @@
 import type { PlatformTheme, ThemeStyles } from '@/types';
+import { createPlatform } from './platformFactory';
+import { 
+  wechatGreen, 
+  wechatDesktopGreen, 
+  qqBlue, 
+  dingtalkBlue 
+} from './colorSchemes';
 
 export interface ExtendedThemeStyles extends ThemeStyles {
   bubbleLeftBorder?: string;
@@ -13,110 +20,60 @@ export interface ExtendedPlatformTheme extends PlatformTheme {
   styles: ExtendedThemeStyles;
 }
 
-// 微信手机端 (竖屏)
-export const wechatMobileTheme: ExtendedPlatformTheme = {
+// 微信手机端 (竖屏) - 使用模板系统
+export const wechatMobileTheme: ExtendedPlatformTheme = createPlatform({
   id: 'wechat-mobile',
   name: '微信手机端',
   ratio: '9:16',
   emojiSet: 'wechat',
-  styles: {
-    background: '#e8e8e8',
-    bubbleLeftBg: '#ffffff',
-    bubbleRightBg: '#9fea58',
-    bubbleLeftColor: '#192020',
-    bubbleRightColor: '#192020',
-    headerBg: '#191919',
-    headerColor: '#ffffff',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
-    fontSize: 15,
-    bubbleRadius: 10,
-    bubblePadding: 8,
-    avatarSize: 42,
-    messageGap: 10,
-    timeGap: 300,
-    bubbleShadow: '0 1px 2px rgba(0,0,0,0.05)',
-    deviceType: 'mobile',
-  },
-};
+  deviceType: 'mobile',
+  colorScheme: wechatGreen,
+});
 
-// 微信电脑端 (横屏)
-export const wechatDesktopTheme: ExtendedPlatformTheme = {
+// 微信电脑端 (横屏) - 使用模板系统
+export const wechatDesktopTheme: ExtendedPlatformTheme = createPlatform({
   id: 'wechat-desktop',
   name: '微信电脑端',
   ratio: '16:9',
   emojiSet: 'wechat',
-  styles: {
-    background: '#f5f5f5',
-    bubbleLeftBg: '#ffffff',
-    bubbleRightBg: '#95ec69',
-    bubbleLeftColor: '#333333',
-    bubbleRightColor: '#333333',
-    headerBg: '#2e2e2e',
-    headerColor: '#ffffff',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
-    fontSize: 14,
-    bubbleRadius: 6,
-    bubblePadding: 10,
-    avatarSize: 36,
-    messageGap: 8,
-    timeGap: 300,
-    bubbleShadow: '0 1px 3px rgba(0,0,0,0.08)',
-    deviceType: 'desktop',
-  },
-};
+  deviceType: 'desktop',
+  colorScheme: wechatDesktopGreen,
+});
 
 // 保持向后兼容
 export const wechatTheme = wechatMobileTheme;
 
-export const qqTheme: ExtendedPlatformTheme = {
+// QQ - 使用模板系统
+export const qqTheme: ExtendedPlatformTheme = createPlatform({
   id: 'qq',
   name: 'QQ',
   ratio: '9:16',
   emojiSet: 'native',
-  styles: {
-    background: '#e8e8ed',
-    bubbleLeftBg: '#ffffff',
-    bubbleRightBg: '#b8e864',
-    bubbleLeftColor: '#000000',
-    bubbleRightColor: '#000000',
-    headerBg: '#11b7f4',
-    headerColor: '#ffffff',
-    fontFamily: '"Microsoft YaHei", "PingFang SC", sans-serif',
-    fontSize: 14,
+  deviceType: 'mobile',
+  colorScheme: qqBlue,
+  styleOverrides: {
     bubbleRadius: 8,
-    bubblePadding: 8,
     avatarSize: 40,
-    messageGap: 8,
-    timeGap: 300,
     bubbleShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    deviceType: 'mobile',
   },
-};
+  configOverrides: {
+    showAvatarBorder: true,
+    backgroundPattern: true,
+  },
+});
 
-export const dingtalkTheme: ExtendedPlatformTheme = {
+// 钉钉 - 使用模板系统
+export const dingtalkTheme: ExtendedPlatformTheme = createPlatform({
   id: 'dingtalk',
   name: '钉钉',
   ratio: '16:9',
   emojiSet: 'native',
-  styles: {
-    background: '#f5f5f5',
-    bubbleLeftBg: '#ffffff',
-    bubbleRightBg: '#d7f0db',
-    bubbleLeftColor: '#333333',
-    bubbleRightColor: '#333333',
-    headerBg: '#1677ff',
-    headerColor: '#ffffff',
-    fontFamily: '"Microsoft YaHei", "PingFang SC", sans-serif',
-    fontSize: 14,
+  deviceType: 'desktop',
+  colorScheme: dingtalkBlue,
+  styleOverrides: {
     bubbleRadius: 20,
-    bubblePadding: 10,
-    avatarSize: 36,
-    messageGap: 8,
-    timeGap: 300,
-    bubbleShadow: '0 2px 4px rgba(0,0,0,0.08)',
-    deviceType: 'desktop',
   },
-};
+});
 
 export const allThemes: ExtendedPlatformTheme[] = [
   wechatMobileTheme, 

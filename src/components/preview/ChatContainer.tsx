@@ -2,9 +2,14 @@ import { useRef, useEffect, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import MessageContent from '@/components/common/MessageContent';
 import { getPlatformConfig } from '@/themes/wechat';
-import type { Message } from '@/types';
+import type { Message, SystemData } from '@/types';
 import { generateAvatar } from '@/utils/avatar';
 import { defaultLayoutConfig } from '@/core/messageLayout';
+import System from '@/components/messages/wechat/System';
+
+function SystemMessage({ data, scale }: { data: SystemData; scale: number }) {
+  return <System data={data} scale={scale} />;
+}
 
 interface ChatContainerProps {
   messages: Message[];
@@ -16,9 +21,10 @@ export default function ChatContainer({
   scale = 0.4 
 }: ChatContainerProps) {
   const { project } = useChatStore();
-  const { platform, chatTitle } = project;
+  const { platform, chatTitle, chatType, groupInfo } = project;
   const { styles } = platform;
   const config = getPlatformConfig(platform.id);
+  const isGroup = chatType === 'group';
   const scrollRef = useRef<HTMLDivElement>(null);
   const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
 
@@ -165,9 +171,21 @@ export default function ChatContainer({
         <>
           {renderStatusBar()}
           <div style={headerStyle}>
-            <span style={{ fontWeight: 600 }}>{platform.name}</span>
+            {isGroup ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 * effectiveScale }}>
+                <span style={{ fontWeight: 600 }}>{groupInfo?.name || chatTitle || '群聊'}</span>
+                {groupInfo?.memberCount && (
+                  <span style={{ fontSize: Math.max(10, scaledFontSize * 0.7), opacity: 0.7 }}>
+                    {groupInfo.memberCount}人
+                    {groupInfo.onlineCount ? ` · ${groupInfo.onlineCount}人在线` : ''}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span style={{ fontWeight: 600 }}>{platform.name}</span>
+            )}
           </div>
-          {chatTitle && (
+          {chatTitle && !isGroup && (
             <div style={{
               height: scaledHeaderHeight * 0.8,
               backgroundColor: styles.headerBg,
@@ -189,8 +207,21 @@ export default function ChatContainer({
 
     return (
       <>
-        <div style={headerStyle}>{platform.name}</div>
-        {chatTitle && (
+        <div style={headerStyle}>
+          {isGroup ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 * effectiveScale }}>
+              <span>{groupInfo?.name || chatTitle || '群聊'}</span>
+              {groupInfo?.memberCount && (
+                <span style={{ fontSize: Math.max(10, scaledFontSize * 0.75), opacity: 0.7 }}>
+                  ({groupInfo.memberCount}人)
+                </span>
+              )}
+            </div>
+          ) : (
+            platform.name
+          )}
+        </div>
+        {chatTitle && !isGroup && (
           <div style={{
             height: scaledHeaderHeight * 0.8,
             backgroundColor: styles.headerBg,
@@ -327,6 +358,21 @@ export default function ChatContainer({
               </div>
             ) : (
               messages.map((msg) => {
+                // 系统消息居中显示
+                if (msg.type === 'system') {
+                  return (
+                    <div key={msg.id} style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      marginBottom: scaledGap,
+                    }}>
+                      {msg.system && (
+                        <SystemMessage data={msg.system} scale={effectiveScale} />
+                      )}
+                    </div>
+                  );
+                }
+
                 const isUser = msg.role === 'user';
                 const senderHeight = scaledAvatarSize * defaultLayoutConfig.avatarSection.senderName.heightRatio;
 
@@ -411,6 +457,21 @@ export default function ChatContainer({
           </div>
         ) : (
           messages.map((msg) => {
+            // 系统消息居中显示
+            if (msg.type === 'system') {
+              return (
+                <div key={msg.id} style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  marginBottom: scaledGap,
+                }}>
+                  {msg.system && (
+                    <SystemMessage data={msg.system} scale={effectiveScale} />
+                  )}
+                </div>
+              );
+            }
+
             const isUser = msg.role === 'user';
             const senderHeight = scaledAvatarSize * defaultLayoutConfig.avatarSection.senderName.heightRatio;
 

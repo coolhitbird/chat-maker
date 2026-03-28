@@ -5,6 +5,7 @@ import RedPacketEditor from './RedPacketEditor';
 import TransferEditor from './TransferEditor';
 import ImageEditor from './ImageEditor';
 import VoiceEditor from './VoiceEditor';
+import SystemEditor from './SystemEditor';
 
 export default function MessageInput() {
   const { project, addMessage } = useChatStore();
@@ -15,6 +16,7 @@ export default function MessageInput() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
+  const [showSystem, setShowSystem] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,6 +130,13 @@ export default function MessageInput() {
         >
           语音
         </button>
+        <button
+          type="button"
+          onClick={() => setShowSystem(true)}
+          className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+        >
+          系统
+        </button>
       </div>
       
       <RedPacketEditor 
@@ -148,6 +157,11 @@ export default function MessageInput() {
       <VoiceEditor 
         isOpen={showVoice} 
         onClose={() => setShowVoice(false)} 
+      />
+      
+      <SystemEditor 
+        isOpen={showSystem} 
+        onClose={() => setShowSystem(false)} 
       />
     </form>
   );

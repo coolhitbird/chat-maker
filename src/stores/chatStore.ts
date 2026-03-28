@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { Message, UserProfile, PlatformTheme, ExportSettings, ChatProject } from '@/types';
+import type { Message, UserProfile, PlatformTheme, ExportSettings, ChatProject, ChatType, GroupInfo } from '@/types';
 import { wechatTheme, getDefaultDimensions } from '@/themes/wechat';
 import { generateAvatar } from '@/utils/avatar';
 
@@ -64,6 +64,8 @@ interface ChatState {
   
   updateProjectName: (name: string) => void;
   updateChatTitle: (title: string) => void;
+  setChatType: (type: ChatType) => void;
+  updateGroupInfo: (info: Partial<GroupInfo>) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -71,6 +73,8 @@ export const useChatStore = create<ChatState>((set) => ({
     id: nanoid(),
     name: '新对话',
     chatTitle: '聊天记录',
+    chatType: 'private',
+    groupInfo: undefined,
     platform: wechatTheme,
     users: defaultUsers,
     messages: [],
@@ -299,6 +303,28 @@ export const useChatStore = create<ChatState>((set) => ({
       project: {
         ...state.project,
         chatTitle: title,
+      },
+    })),
+
+  setChatType: (type) =>
+    set((state) => ({
+      project: {
+        ...state.project,
+        chatType: type,
+        groupInfo: type === 'group' 
+          ? (state.project.groupInfo || { name: state.project.chatTitle || '群聊' })
+          : undefined,
+      },
+    })),
+
+  updateGroupInfo: (info) =>
+    set((state) => ({
+      project: {
+        ...state.project,
+        groupInfo: {
+          ...(state.project.groupInfo || { name: state.project.chatTitle || '群聊' }),
+          ...info,
+        },
       },
     })),
 }));

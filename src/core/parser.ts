@@ -1,4 +1,4 @@
-import type { Message, UserProfile } from '@/types';
+import type { Message, UserProfile, SystemData } from '@/types';
 import { generateAvatar } from '@/utils/avatar';
 
 interface ParsedLine {
@@ -47,8 +47,11 @@ function parseLine(line: string): ParsedLine | null {
     return { sender: '', content: trimmedLine, isContinuation: true };
   }
 
-  // 特殊处理：特殊消息格式不是发送者（如 [红包]、[转账]、[语音]、[图片]）
-  const specialFormats = ['[红包]', '[转账]', '[语音', '[图片]'];
+    // 特殊处理：特殊消息格式不是发送者（如 [红包]、[转账]、[语音]、[图片]、[系统]）
+  const specialFormats = [
+    '[红包]', '[转账]', '[语音', '[图片]', 
+    '[撤回]', '[拍一拍]', '[添加好友]', '[邀请]', '[系统]'
+  ];
   for (const format of specialFormats) {
     if (trimmedLine.startsWith(format)) {
       // 特殊消息格式作为延续内容
@@ -207,11 +210,12 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
     const finalRole = matchedUser?.role || role;
 
     // 检查是否是特殊消息
-    let messageType: 'text' | 'redpacket' | 'transfer' | 'voice' | 'image' = 'text';
+    let messageType: 'text' | 'redpacket' | 'transfer' | 'voice' | 'image' | 'timestamp' | 'system' | 'file' = 'text';
     let redPacketData = undefined;
     let transferData = undefined;
     let voiceData = undefined;
     let imageData = undefined;
+    let systemData: SystemData | undefined = undefined;
     let messageContent = parsed.content;
 
     // 红包消息
@@ -284,6 +288,56 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
         caption: caption || undefined,
       };
     }
+    // 撤回消息 [撤回]
+    else if (parsed.content.startsWith('[撤回]')) {
+      messageType = 'system';
+      const text = parsed.content.replace('[撤回]', '').trim() || '你撤回了一条消息';
+      messageContent = text;
+      systemData = {
+        text: text,
+        type: 'recall',
+      };
+    }
+    // 拍一拍消息 [拍一拍 xxx 拍了拍 xxx]
+    else if (parsed.content.startsWith('[拍一拍]')) {
+      messageType = 'system';
+      const text = parsed.content.replace('[拍一拍]', '').trim() || 'xxx 拍了拍 xxx';
+      messageContent = text;
+      systemData = {
+        text: text,
+        type: 'pat',
+      };
+    }
+    // 添加好友消息 [添加好友 xxx]
+    else if (parsed.content.startsWith('[添加好友]')) {
+      messageType = 'system';
+      const text = parsed.content.replace('[添加好友]', '').trim() || 'xxx 申请添加你为好友';
+      messageContent = text;
+      systemData = {
+        text: text,
+        type: 'addFriend',
+      };
+    }
+    // 系统消息 [系统 xxx]
+    else if (parsed.content.startsWith('[系统]')) {
+      messageType = 'system';
+      const text = parsed.content.replace('[系统]', '').trim();
+      messageContent = text;
+      systemData = {
+        text: text,
+        type: 'info',
+      };
+    }
+    // 邀请进群消息 [邀请 xxx 邀请 xxx 加入群聊]
+    else if (parsed.content.startsWith('[邀请]')) {
+      messageType = 'system';
+      const text = parsed.content.replace('[邀请]', '').trim() || 'xxx 邀请 xxx 加入群聊';
+      messageContent = text;
+      systemData = {
+        text: text,
+        type: 'invite',
+      };
+    }
 
     messages.push({
       id: crypto.randomUUID(),
@@ -297,6 +351,7 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
       transfer: transferData,
       voice: voiceData,
       image: imageData,
+      system: systemData,
     });
   }
 

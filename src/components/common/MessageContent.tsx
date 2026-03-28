@@ -93,7 +93,13 @@ export default function MessageContent({
     }
 
     // 普通文本消息
-    const textContent = content || message?.content || '';
+    let textContent = content || message?.content || '';
+    
+    // 打字动画：只显示部分内容
+    if (message?.typingCharCount !== undefined && message.typingCharCount < textContent.length) {
+      textContent = textContent.substring(0, message.typingCharCount);
+    }
+    
     const parts = parseEmoji(textContent);
     
     return (

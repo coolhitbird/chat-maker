@@ -1,21 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
-import { allThemes } from '@/themes';
 import MessageList from '@/components/editor/MessageList';
 import MessageInput from '@/components/editor/MessageInput';
 import TextImporter from '@/components/editor/TextImporter';
 import UserManager from '@/components/editor/UserManager';
-import ExportPanel from '@/components/exporter/ExportPanel';
 import Preview from '@/components/preview/Preview';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'export'>('editor');
-  const { project, setPlatform, updateChatTitle } = useChatStore();
-
-  const handlePlatformChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const theme = allThemes.find(t => t.id === e.target.value);
-    if (theme) setPlatform(theme);
-  }, [setPlatform]);
+  const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
+  const { project, updateChatTitle } = useChatStore();
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -23,17 +16,6 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-800">Chat Maker</h1>
-            <div className="flex items-center gap-4">
-              <select
-                value={project.platform.id}
-                onChange={handlePlatformChange}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {allThemes.map(theme => (
-                  <option key={theme.id} value={theme.id}>{theme.name}</option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
       </header>
@@ -41,7 +23,7 @@ function App() {
       <nav className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex gap-1">
-            {(['editor', 'preview', 'export'] as const).map(tab => (
+            {(['editor', 'preview'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -51,7 +33,7 @@ function App() {
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {tab === 'editor' ? '编辑' : tab === 'preview' ? '预览' : '导出'}
+                {tab === 'editor' ? '编辑' : '预览 & 导出'}
               </button>
             ))}
           </div>
@@ -106,8 +88,6 @@ function App() {
         )}
 
         {activeTab === 'preview' && <Preview />}
-
-        {activeTab === 'export' && <ExportPanel />}
 
         {/* 始终渲染隐藏的预览容器，用于视频导出 */}
         <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>

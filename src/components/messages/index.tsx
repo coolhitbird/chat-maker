@@ -6,6 +6,9 @@ import { default as WechatRedPacketComponent } from './wechat/RedPacket';
 import { default as WechatTransferComponent } from './wechat/Transfer';
 import { default as WechatVoiceComponent } from './wechat/Voice';
 import { default as WechatImageComponent } from './wechat/Image';
+import { default as WechatTimestampComponent } from './wechat/Timestamp';
+import { default as WechatSystemComponent } from './wechat/System';
+import { default as WechatFileComponent } from './wechat/File';
 import { redPacketStyle as wechatRedPacketStyleConfig } from './wechat/styles';
 import { transferStyle as wechatTransferStyleConfig } from './wechat/styles';
 
@@ -31,6 +34,8 @@ export const MessageTypes = {
   CONTACT: 'contact',
   EMOJI: 'emoji',
   STICKER: 'sticker',
+  TIMESTAMP: 'timestamp',
+  SYSTEM: 'system',
 } as const;
 
 // 组件集合
@@ -40,6 +45,9 @@ export const MessageComponents = {
     transfer: WechatTransferComponent,
     voice: WechatVoiceComponent,
     image: WechatImageComponent,
+    timestamp: WechatTimestampComponent,
+    system: WechatSystemComponent,
+    file: WechatFileComponent,
   },
   dingtalk: {
     redpacket: DingtalkRedPacketComponent,
@@ -60,6 +68,9 @@ export {
   WechatTransferComponent as WechatTransfer,
   WechatVoiceComponent as WechatVoice,
   WechatImageComponent as WechatImage,
+  WechatTimestampComponent as WechatTimestamp,
+  WechatSystemComponent as WechatSystem,
+  WechatFileComponent as WechatFile,
   DingtalkRedPacketComponent as DingtalkRedPacket,
   WhatsAppRedPacketComponent as WhatsAppRedPacket,
 };

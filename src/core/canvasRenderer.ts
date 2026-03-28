@@ -251,9 +251,8 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     } else if (msg.type === 'transfer') {
       bubbleHeight = 120;
     } else if (msg.type === 'voice' && msg.voice) {
-      // 语音消息高度 = 语音条高度 + 文字内容高度（如果有）
-      const hasText = msg.voice.text && msg.voice.text.length > 0;
-      bubbleHeight = hasText ? 80 : 50;
+      // 语音消息高度 = 固定 50px（与预览一致）
+      bubbleHeight = 50;
     } else if (msg.type === 'image') {
       bubbleHeight = 200; // 图片消息固定高度
     } else {
@@ -274,7 +273,12 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   // 每行高度 = max(头像高度, 用户名高度 + 气泡高度) + 间距
   let totalContentHeight = contentPadding;
   for (const data of messageData) {
-    const contentHeight = senderNameHeight + data.bubbleHeight;
+    let extraHeight = 0;
+    // 如果是语音消息且有文字，需要额外高度
+    if (data.msg.type === 'voice' && data.msg.voice && data.msg.voice.text) {
+      extraHeight = 24; // 文字高度
+    }
+    const contentHeight = senderNameHeight + data.bubbleHeight + extraHeight;
     const rowHeight = Math.max(avatarSize, contentHeight) + gap;
     totalContentHeight += rowHeight;
   }
@@ -607,74 +611,66 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + (s.footer?.height || 32) / 2);
       
     } else if (msg.type === 'voice' && msg.voice) {
-      // 绘制语音消息
+      // 绘制语音消息 - 与预览一致
       const voice = msg.voice;
-      const padding = 12;
-      const iconSize = 20;
+      const padding = 8;
+      const iconSize = 16;
+      const waveHeight = 24;
+      const barWidth = 3;
+      const barGap = 2;
+      const waveCount = 20;
       
-      // 绘制播放图标
+      // 生成波形数据
+      const waveformData: number[] = [];
+      for (let i = 0; i < waveCount; i++) {
+        waveformData.push(Math.sin(i * 0.5) * 0.5 + 0.5);
+      }
+      
+      // 语音气泡总高度
+      const voiceBubbleHeight = bubbleHeight;
+      
+      // 绘制播放图标（三角形）
       const iconX = bubbleX + padding;
-      const iconY = bubbleY + (bubbleHeight * 0.5 - iconSize) / 2; // 图标在语音条上半部分居中
-      ctx.fillStyle = isUser ? bubbleColor : '#333';
+      const iconY = bubbleY + (voiceBubbleHeight - iconSize) / 2;
+      ctx.fillStyle = bubbleColor;
       ctx.beginPath();
-      // 播放图标（三角形）
       ctx.moveTo(iconX, iconY);
       ctx.lineTo(iconX, iconY + iconSize);
       ctx.lineTo(iconX + iconSize, iconY + iconSize / 2);
       ctx.closePath();
       ctx.fill();
       
-      // 绘制语音波形（只在上半部分）
-      const waveX = iconX + iconSize + 8;
-      const waveY = bubbleY + padding;
-      const waveHeight = bubbleHeight * 0.5 - padding * 2; // 波形高度 = 气泡上半部分 - padding
-      const waveCount = 20;
-      const barWidth = 3;
-      const barGap = 2;
-      
+      // 绘制语音波形
+      const waveX = iconX + iconSize + padding;
+      const waveY = bubbleY + (voiceBubbleHeight - waveHeight) / 2;
       ctx.fillStyle = isUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.3)';
       for (let i = 0; i < waveCount; i++) {
-        const barHeight = (Math.sin(i * 0.5) * 0.5 + 0.5) * waveHeight * 0.8 + waveHeight * 0.2;
+        const barH = (waveformData[i] * 0.8 + 0.2) * waveHeight;
         const barX = waveX + i * (barWidth + barGap);
-        const barY = waveY + (waveHeight - barHeight) / 2;
+        const barY = waveY + (waveHeight - barH) / 2;
         ctx.beginPath();
-        ctx.roundRect(barX, barY, barWidth, barHeight, 1);
+        ctx.roundRect(barX, barY, barWidth, barH, 1);
         ctx.fill();
       }
       
-      // 绘制时长（在语音条上半部分）
+      // 绘制时长
       ctx.fillStyle = isUser ? 'rgba(255,255,255,0.8)' : '#999';
-      ctx.font = `${12}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.font = `12px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`${voice.duration}"'`, bubbleX + bubbleWidth - padding, bubbleY + bubbleHeight * 0.25);
+      const durationX = bubbleX + bubbleWidth - padding;
+      ctx.fillText(`${voice.duration}"`, durationX, bubbleY + voiceBubbleHeight / 2);
       
-      // 绘制文字内容（如果有）- 在气泡下半部分
+      // 绘制文字内容（如果有）
       if (voice.text) {
-        const textPadding = 6;
-        const textY = bubbleY + bubbleHeight * 0.5; // 文字在气泡下半部分
-        
-        // 绘制文字背景
-        ctx.fillStyle = isUser ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)';
+        const textY = bubbleY + voiceBubbleHeight + 4;
+        ctx.fillStyle = isUser ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
         ctx.beginPath();
-        ctx.moveTo(bubbleX + bubbleRadius, bubbleY + bubbleHeight * 0.5);
-        ctx.lineTo(bubbleX + bubbleWidth - bubbleRadius, bubbleY + bubbleHeight * 0.5);
-        ctx.arcTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight * 0.5, bubbleX + bubbleWidth, bubbleY + bubbleHeight * 0.5 + bubbleRadius, bubbleRadius);
-        ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - bubbleRadius);
-        ctx.arcTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight, bubbleX + bubbleWidth - bubbleRadius, bubbleY + bubbleHeight, bubbleRadius);
-        ctx.lineTo(bubbleX + bubbleRadius, bubbleY + bubbleHeight);
-        ctx.arcTo(bubbleX, bubbleY + bubbleHeight, bubbleX, bubbleY + bubbleHeight - bubbleRadius, bubbleRadius);
-        ctx.lineTo(bubbleX, bubbleY + bubbleHeight * 0.5 + bubbleRadius);
-        ctx.arcTo(bubbleX, bubbleY + bubbleHeight * 0.5, bubbleX + bubbleRadius, bubbleY + bubbleHeight * 0.5, bubbleRadius);
-        ctx.closePath();
+        ctx.roundRect(bubbleX, textY, bubbleWidth, 16, 4);
         ctx.fill();
-        
-        // 绘制文字
         ctx.fillStyle = isUser ? 'rgba(255,255,255,0.9)' : '#666';
-        ctx.font = `${12}px "${styles.fontFamily.replace(/"/g, '')}"`;
         ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(voice.text, bubbleX + textPadding, textY + bubbleHeight * 0.25);
+        ctx.fillText(voice.text, bubbleX + padding, textY + 8);
       }
     } else if (msg.type === 'image' && msg.image) {
       // 绘制图片消息（正方形）
