@@ -5,14 +5,21 @@ interface VoiceProps {
   isUser?: boolean;
   style?: MessageStyleConfig;
   scale?: number;
+  fontSize?: number;
 }
 
 export default function Voice({ 
   data, 
   isUser = false,
-  scale = 1 
+  scale = 1,
+  fontSize
 }: VoiceProps) {
   const { duration, waveform = [], text } = data;
+  // 如果没有传入fontSize，则由scale自动计算（与普通文字保持一致）
+  const textFontSize = fontSize ? fontSize * scale : undefined;
+  
+  // DEBUG: 打印字号信息
+  console.log(`[Voice Component] fontSize prop=${fontSize}, scale=${scale}, textFontSize=${textFontSize}`);
   
   // 生成随机波形数据（如果没有提供）
   const waveformData = waveform.length > 0 
@@ -24,6 +31,7 @@ export default function Voice({
       display: 'flex',
       flexDirection: 'column',
       gap: `${4 * scale}px`,
+      fontSize: 'inherit',
     }}>
       {/* 语音部分 */}
       <div style={{
@@ -79,18 +87,11 @@ export default function Voice({
         </div>
       </div>
 
-      {/* 文字内容（如果有） */}
+      {/* 文字内容（如果有）- 明确继承父元素字号 */}
       {text && (
-        <div style={{
-          padding: `${4 * scale}px`,
-          fontSize: 12 * scale,
-          color: isUser ? 'rgba(255,255,255,0.8)' : '#666',
-          backgroundColor: isUser ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-          borderRadius: 4 * scale,
-          lineHeight: 1.4,
-        }}>
+        <span style={{ fontSize: 'inherit', color: 'inherit' }}>
           {text}
-        </div>
+        </span>
       )}
     </div>
   );

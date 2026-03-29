@@ -20,7 +20,7 @@ export default function ChatContainer({
   messages, 
   scale = 0.4 
 }: ChatContainerProps) {
-  const { project } = useChatStore();
+  const { project, userSettings } = useChatStore();
   const { platform, chatTitle, chatType, groupInfo } = project;
   const { styles } = platform;
   const config = getPlatformConfig(platform.id);
@@ -57,6 +57,9 @@ export default function ChatContainer({
   const scaledGap = Math.round(styles.messageGap * effectiveScale);
   const scaledHeaderHeight = Math.round((isMobile ? 50 : 40) * effectiveScale);
   const scaledBubbleRadius = Math.max(4, Math.round(styles.bubbleRadius * effectiveScale));
+
+  // DEBUG: 打印字号信息
+  console.log(`[ChatContainer] styles.fontSize=${styles.fontSize}, scale=${scale}, effectiveScale=${effectiveScale}, scaledFontSize=${scaledFontSize}`);
 
   // 气泡最大宽度 = 100% - 两个头像宽度 - gap
   const maxBubbleWidth = `calc(100% - ${scaledAvatarSize * 2 + scaledGap * 2}px)`;
@@ -263,10 +266,12 @@ export default function ChatContainer({
     );
   };
 
+  const isDark = userSettings.theme === 'dark';
+  
   const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
-    backgroundColor: styles.background,
+    backgroundColor: isDark ? '#1f1f1f' : styles.background,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -277,13 +282,15 @@ export default function ChatContainer({
     flex: 1,
     overflowY: 'auto',
     padding: scaledGap,
-    backgroundColor: styles.background,
+    backgroundColor: isDark ? '#1f1f1f' : styles.background,
   };
 
   if (platform.id === 'qq' && config.backgroundPattern) {
     bodyStyle = {
       ...bodyStyle,
-      backgroundImage: 'radial-gradient(circle, #c8c8c8 1px, transparent 1px)',
+      backgroundImage: isDark 
+        ? 'radial-gradient(circle, #444 1px, transparent 1px)'
+        : 'radial-gradient(circle, #c8c8c8 1px, transparent 1px)',
       backgroundSize: `${16 * effectiveScale}px ${16 * effectiveScale}px`,
     };
   }
@@ -300,9 +307,11 @@ export default function ChatContainer({
         <div style={{
           width: '100%',
           height: '100%',
-          backgroundColor: '#ffffff',
+          backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
           borderRadius: 8 * effectiveScale,
-          boxShadow: `0 4px 20px rgba(0,0,0,0.15)`,
+          boxShadow: isDark 
+            ? `0 4px 20px rgba(0,0,0,0.5)`
+            : `0 4px 20px rgba(0,0,0,0.15)`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -351,7 +360,7 @@ export default function ChatContainer({
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
-                color: '#999',
+                color: isDark ? '#666' : '#999',
                 fontSize: scaledFontSize,
               }}>
                 暂无消息
@@ -403,7 +412,7 @@ export default function ChatContainer({
                       {config.showSenderName && (
                         <div style={{
                           fontSize: scaledFontSize * 0.7,
-                          color: '#888',
+                          color: isDark ? '#888' : '#888',
                           height: senderHeight,
                           display: 'flex',
                           alignItems: 'flex-end',
@@ -450,7 +459,7 @@ export default function ChatContainer({
             alignItems: 'center',
             justifyContent: 'center',
             height: '100%',
-            color: '#999',
+            color: isDark ? '#666' : '#999',
             fontSize: scaledFontSize,
           }}>
             暂无消息
@@ -492,7 +501,7 @@ export default function ChatContainer({
                   {config.showSenderName && (
                     <div style={{
                       fontSize: scaledFontSize * 0.7,
-                      color: '#888',
+                      color: isDark ? '#aaa' : '#888',
                       height: senderHeight,
                       display: 'flex',
                       alignItems: 'flex-end',

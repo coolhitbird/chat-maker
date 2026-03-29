@@ -11,8 +11,8 @@ interface VoiceEditorProps {
 export default function VoiceEditor({ isOpen, onClose }: VoiceEditorProps) {
   const { project, addMessage } = useChatStore();
   const [sender, setSender] = useState(project.users[0]?.name || '用户A');
-  const [duration, setDuration] = useState(5); // 默认5秒
-  const [text, setText] = useState(''); // 转文字内容
+  const [duration, setDuration] = useState(5);
+  const [text, setText] = useState('');
 
   const handleSubmit = () => {
     const voiceData: VoiceData = {
@@ -26,7 +26,7 @@ export default function VoiceEditor({ isOpen, onClose }: VoiceEditorProps) {
       role: user?.role || 'user',
       sender: sender,
       avatar: user?.avatar || generateAvatar(sender),
-      content: text.trim() || `[语音 ${duration}"]'`,
+      content: text.trim() || `[语音 ${duration}"]`,
       type: 'voice',
       timestamp: Date.now(),
       voice: voiceData,
@@ -39,40 +39,16 @@ export default function VoiceEditor({ isOpen, onClose }: VoiceEditorProps) {
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        padding: 24,
-        width: 350,
-        maxWidth: '90%',
-      }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: 18 }}>插入语音</h3>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-[350px] max-w-[90%]">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">插入语音</h3>
         
-        {/* 发送者选择 */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>发送者</label>
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">发送者</label>
           <select
             value={sender}
             onChange={(e) => setSender(e.target.value)}
-            style={{
-              width: '100%',
-              padding: 8,
-              borderRadius: 6,
-              border: '1px solid #ddd',
-              fontSize: 14,
-            }}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
           >
             {project.users.map(user => (
               <option key={user.id} value={user.name}>{user.name}</option>
@@ -80,9 +56,8 @@ export default function VoiceEditor({ isOpen, onClose }: VoiceEditorProps) {
           </select>
         </div>
 
-        {/* 语音时长 */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">
             语音时长：{duration}秒
           </label>
           <input
@@ -91,88 +66,51 @@ export default function VoiceEditor({ isOpen, onClose }: VoiceEditorProps) {
             max="60"
             value={duration}
             onChange={(e) => setDuration(parseInt(e.target.value))}
-            style={{ width: '100%' }}
+            className="w-full"
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#999' }}>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
             <span>1秒</span>
             <span>60秒</span>
           </div>
         </div>
 
-        {/* 语音文字 */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>语音内容（可选）</label>
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">语音内容（可选）</label>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="请输入语音内容..."
             rows={2}
-            style={{
-              width: '100%',
-              padding: 8,
-              borderRadius: 6,
-              border: '1px solid #ddd',
-              fontSize: 14,
-              resize: 'none',
-            }}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm resize-none"
           />
         </div>
 
-        {/* 预览 */}
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 12,
-          background: '#f5f5f5',
-          borderRadius: 8,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <svg width={16} height={16} viewBox="0 0 24 24" fill="#333">
+        <div className="mb-4 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center gap-2">
+          <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor" className="text-gray-600 dark:text-gray-300">
             <path d="M8 5v14l11-7z"/>
           </svg>
-          <div style={{ flex: 1, display: 'flex', gap: 2, alignItems: 'center', height: 20 }}>
+          <div className="flex-1 flex gap-[2px] items-center h-5">
             {Array.from({ length: 20 }, (_, i) => (
               <div
                 key={i}
-                style={{
-                  width: 3,
-                  height: Math.random() * 14 + 6,
-                  background: '#999',
-                  borderRadius: 1,
-                }}
+                className="w-[3px] bg-gray-400 dark:bg-gray-500 rounded-sm"
+                style={{ height: `${Math.random() * 14 + 6}px` }}
               />
             ))}
           </div>
-          <span style={{ fontSize: 12, color: '#666' }}>{duration}"'</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{duration}"</span>
         </div>
 
-        {/* 操作按钮 */}
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+        <div className="flex gap-3 justify-end">
           <button
             onClick={onClose}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 6,
-              border: '1px solid #ddd',
-              background: '#fff',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-600"
           >
             取消
           </button>
           <button
             onClick={handleSubmit}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 6,
-              border: 'none',
-              background: '#07c160',
-              color: '#fff',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
+            className="px-4 py-2 rounded-lg bg-green-500 text-white text-sm hover:bg-green-600"
           >
             插入
           </button>

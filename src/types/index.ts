@@ -133,6 +133,39 @@ export interface ChatProject {
   users: UserProfile[];
   messages: Message[];
   settings: ExportSettings;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface StoredProject {
+  id: string;
+  name: string;
+  chatTitle: string;
+  chatType: ChatType;
+  groupInfo?: GroupInfo;
+  platform: PlatformTheme;
+  users: UserProfile[];
+  messages: Message[];
+  settings: ExportSettings;
+  createdAt: number;
+  updatedAt: number;
+  thumbnail?: string; // 缩略图（base64）
+}
+
+export interface ProjectMetadata {
+  id: string;
+  name: string;
+  thumbnail?: string;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface UserSettings {
+  theme: 'light' | 'dark' | 'auto';
+  autoSave: boolean;
+  autoSaveInterval: number; // 秒
+  lastProjectId?: string;
 }
 
 export interface ParseOptions {
@@ -146,4 +179,52 @@ export interface WechatEmoji {
   key: string;
   name: string;
   url: string;
+}
+
+export interface ChatState {
+  projects: StoredProject[];
+  currentProjectId: string;
+  userSettings: UserSettings;
+  project: StoredProject;
+  selectedPlatform: PlatformTheme;
+  isPlaying: boolean;
+  isExporting: boolean;
+  exportProgress: number;
+  previewRef: HTMLDivElement | null;
+  ffmpegLoaded: boolean;
+  exportingVideoVisibleCount: number;
+  createProject: () => void;
+  loadProject: (id: string) => void;
+  deleteProject: (id: string) => void;
+  duplicateProject: (id: string) => void;
+  saveCurrentProject: () => void;
+  updateProjectMetadata: (metadata: Partial<StoredProject>) => void;
+  updateUserSettings: (settings: Partial<UserSettings>) => void;
+  setExportingVideoVisibleCount: (count: number) => void;
+  setPlatform: (platform: PlatformTheme) => void;
+  addMessage: (message: Partial<Message>) => void;
+  updateMessage: (id: string, updates: Partial<Message>) => void;
+  deleteMessage: (id: string) => void;
+  setMessages: (messages: Message[]) => void;
+  clearMessages: () => void;
+  reorderMessages: (fromIndex: number, toIndex: number) => void;
+  addUser: (user: Partial<UserProfile>) => void;
+  updateUser: (id: string, updates: Partial<UserProfile>) => void;
+  deleteUser: (id: string) => void;
+  reorderUsers: (fromIndex: number, toIndex: number) => void;
+  moveUserUp: (index: number) => void;
+  moveUserDown: (index: number) => void;
+  updateSettings: (settings: Partial<ExportSettings>) => void;
+  setIsPlaying: (playing: boolean) => void;
+  setIsExporting: (exporting: boolean) => void;
+  setExportProgress: (progress: number) => void;
+  setPreviewRef: (ref: HTMLDivElement | null) => void;
+  setFfmpegLoaded: (loaded: boolean) => void;
+  updateProjectName: (name: string) => void;
+  updateChatTitle: (title: string) => void;
+  setChatType: (type: ChatType) => void;
+  updateGroupInfo: (info: Partial<GroupInfo>) => void;
+  exportProject: () => { version: string; exportedAt: string; project: Omit<StoredProject, 'id'> };
+  importProject: (data: { version?: string; project: Omit<StoredProject, 'id'> }) => void;
+  setProject: (project: StoredProject) => void;
 }

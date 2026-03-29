@@ -59,22 +59,22 @@ export default function TextImporter() {
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">粘贴对话内容</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">粘贴对话内容</label>
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
           placeholder="用户A: 你好&#10;用户B: 你好呀"
           rows={6}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         />
       </div>
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-gray-500 dark:text-gray-400">
         支持格式: 用户A: 内容、[用户A] 内容、用户A - 内容
       </div>
       <div className="flex gap-2">
         <button
           onClick={handleParse}
-          className="flex-1 px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+          className="flex-1 px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
         >
           预览
         </button>
@@ -87,28 +87,28 @@ export default function TextImporter() {
         </button>
       </div>
       {newUsers.length > 0 && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="text-sm font-medium text-blue-700 mb-2">
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+          <div className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
             发现 {newUsers.length} 个新用户
           </div>
           <div className="flex flex-wrap gap-2">
             {newUsers.map(name => (
-              <span key={name} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+              <span key={name} className="px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded text-xs">
                 {name}
               </span>
             ))}
           </div>
-          <div className="text-xs text-blue-600 mt-2">
+          <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
             点击导入后，这些用户将自动添加到用户管理中
           </div>
         </div>
       )}
       {preview.length > 0 && (
-        <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-          <div className="text-sm font-medium text-gray-700 mb-2">预览 ({preview.length} 条消息)</div>
+        <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">预览 ({preview.length} 条消息)</div>
           <div className="space-y-1 max-h-40 overflow-y-auto text-xs">
             {preview.map((item, i) => (
-              <div key={i} className="text-gray-600">
+              <div key={i} className="text-gray-600 dark:text-gray-400">
                 <span className="font-medium">{item.sender}:</span> {item.content}
               </div>
             ))}

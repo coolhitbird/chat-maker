@@ -1,7 +1,7 @@
 # chat-maker-v2 项目进度文档
 
 **创建时间：** 2026-03-27  
-**最后更新：** 2026-03-27  
+**最后更新：** 2026-03-29  
 **项目目标：** 开发一个聊天视频生成器，模拟聊天对话输出图片和视频
 
 ---
@@ -92,13 +92,13 @@
 
 #### Phase 1: 基础完善
 
-| 功能 | 优先级 | 难度 | 工作量 |
-|------|--------|------|--------|
-| 本地存储 | P0 | 低 | 1天 |
-| 自动保存 | P0 | 低 | 0.5天 |
-| 深色模式 | P1 | 低 | 1天 |
-| 项目列表 | P1 | 中 | 2天 |
-| 快捷键 | P2 | 低 | 0.5天 |
+| 功能 | 优先级 | 难度 | 工作量 | 状态 |
+|------|--------|------|--------|------|
+| 本地存储 | P0 | 低 | 1天 | ✅ |
+| 自动保存 | P0 | 低 | 0.5天 | ✅ |
+| 项目列表 | P1 | 中 | 2天 | ✅ |
+| 深色模式 | P1 | 低 | 1天 | ✅ |
+| 快捷键 | P2 | 低 | 0.5天 | ✅ |
 
 #### Phase 2: 内容丰富
 
@@ -211,6 +211,68 @@ AI: 你好呀
 
 ### 5.2 更新日志
 
+#### 2026-03-29 深色模式完善
+
+**完成工作：**
+- ✅ ChatContainer 深色模式 - 聊天预览背景跟随 App 主题
+- ✅ MessageItem 深色模式 - 消息项背景、气泡颜色、按钮
+- ✅ MessageList 深色模式 - 空状态文字
+- ✅ SystemEditor 深色模式 - 弹窗、输入框、按钮
+- ✅ VoiceEditor 深色模式 - 弹窗、输入框、按钮
+- ✅ RedPacketEditor 深色模式 - 弹窗、输入框、按钮
+- ✅ TransferEditor 深色模式 - 弹窗、输入框、按钮
+- ✅ ImageEditor 深色模式 - 弹窗、输入框、按钮
+- ✅ canvasRenderer.ts - 添加 darkMode 参数，渲染深色背景
+- ✅ exporter.ts - 传递 darkMode 到 Canvas 渲染器
+
+**文件变更：**
+- `src/components/editor/MessageItem.tsx` - 深色模式类
+- `src/components/editor/MessageList.tsx` - 深色模式类
+- `src/components/editor/SystemEditor.tsx` - 深色模式类
+- `src/components/editor/VoiceEditor.tsx` - 改为 Tailwind + 深色模式
+- `src/components/editor/RedPacketEditor.tsx` - 改为 Tailwind + 深色模式
+- `src/components/editor/TransferEditor.tsx` - 改为 Tailwind + 深色模式
+- `src/components/editor/ImageEditor.tsx` - 改为 Tailwind + 深色模式
+- `src/core/canvasRenderer.ts` - 添加 darkMode 参数
+- `src/core/exporter.ts` - 添加 darkMode 参数
+
+---
+
+#### 2026-03-28 深色模式核心完成
+
+**完成工作：**
+- ✅ Preview.tsx 深色模式 - 控制栏、下拉框、按钮、导出面板
+- ✅ MessageInput.tsx 深色模式 - 表单、输入框
+- ✅ UserManager.tsx 深色模式 - 用户列表、按钮
+- ✅ TextImporter.tsx 深色模式 - 文本区域、预览面板
+
+**文件变更：**
+- `src/components/preview/Preview.tsx` - 深色模式 UI 适配
+- `src/components/editor/MessageInput.tsx` - 深色模式类
+- `src/components/editor/UserManager.tsx` - 深色模式类
+- `src/components/editor/TextImporter.tsx` - 深色模式类
+- `src/components/preview/ChatContainer.tsx` - 聊天预览背景跟随主题
+
+---
+
+#### 2026-03-27 Phase 1 基础完成
+
+**已完成功能：**
+- ✅ 本地存储 - 使用 LocalStorage 保存项目
+- ✅ 自动保存 - 每30秒自动保存
+- ✅ 项目列表 - 支持新建/切换/重命名/复制/删除
+- ✅ 深色模式 - 右上角太阳/月亮切换
+- ✅ 快捷键 - Ctrl+S 保存
+
+**文件变更：**
+- `src/stores/chatStore.ts` - 本地存储、项目管理
+- `src/components/editor/ProjectList.tsx` - 项目列表 UI
+- `src/App.tsx` - 集成组件、添加深色模式、快捷键
+- `tailwind.config.js` - 启用 darkMode: 'class'
+- `src/types/index.ts` - 添加 ChatState 类型
+
+---
+
 #### 2026-03-27 晚间更新 (第二版)
 
 **系统消息显示样式修复：**
@@ -321,14 +383,15 @@ AI: 你好呀
    - [x] 系统消息预览/导出样式修复 ✅
    - [x] 群聊窗口样式 ✅
    - [x] Canvas 视频导出 ✅
-   - [ ] 本地存储
-   - [ ] 自动保存
+   - [x] 本地存储 ✅
+   - [x] 自动保存 ✅
+   - [x] 项目列表 ✅
+   - [x] 深色模式 ✅
+   - [x] 快捷键 ✅
 
 2. **P1 - 本月完成**
    - [ ] 视频消息
    - [ ] WhatsApp 完善
-   - [ ] 深色模式
-   - [ ] 项目列表
    - [ ] 打字动画
 
 3. **P2 - 计划中**

@@ -1,9 +1,17 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { Message, UserProfile, PlatformTheme, ExportSettings, ChatProject, ChatType, GroupInfo } from '@/types';
+import type { Message, UserProfile, ExportSettings, StoredProject, UserSettings, ChatState } from '@/types';
 import { wechatTheme, getDefaultDimensions } from '@/themes/wechat';
 import { generateAvatar } from '@/utils/avatar';
 
+// LocalStorage keys
+const STORAGE_KEYS = {
+  PROJECTS: 'chatmaker_projects',
+  CURRENT_PROJECT_ID: 'chatmaker_current_id',
+  USER_SETTINGS: 'chatmaker_settings',
+} as const;
+
+// Default settings
 const defaultExportSettings: ExportSettings = {
   ...getDefaultDimensions(wechatTheme),
   fps: 30,
@@ -11,6 +19,13 @@ const defaultExportSettings: ExportSettings = {
   typingSpeed: 50,
   messageInterval: 500,
   scrollEnabled: true,
+};
+
+const defaultUserSettings: UserSettings = {
+  theme: 'light',
+  autoSave: true,
+  autoSaveInterval: 30,
+  lastProjectId: undefined,
 };
 
 const defaultUsers: UserProfile[] = [
@@ -28,69 +43,98 @@ const defaultUsers: UserProfile[] = [
   },
 ];
 
-export interface ExportableProject {
-  version: string;
-  exportedAt: string;
-  project: Omit<ChatProject, 'id'>;
-}
-
-interface ChatState {
-  project: ChatProject;
-  selectedPlatform: PlatformTheme;
-  isPlaying: boolean;
-  isExporting: boolean;
-  exportProgress: number;
-  previewRef: HTMLElement | null;
-  ffmpegLoaded: boolean;
-  exportingVideoVisibleCount: number;
-  
-  setExportingVideoVisibleCount: (count: number) => void;
-  setPlatform: (platform: PlatformTheme) => void;
-  addMessage: (message: Omit<Message, 'id'>) => void;
-  updateMessage: (id: string, updates: Partial<Message>) => void;
-  deleteMessage: (id: string) => void;
-  setMessages: (messages: Message[]) => void;
-  clearMessages: () => void;
-  reorderMessages: (fromIndex: number, toIndex: number) => void;
-  
-  addUser: (user: Omit<UserProfile, 'id'>) => void;
-  updateUser: (id: string, updates: Partial<UserProfile>) => void;
-  deleteUser: (id: string) => void;
-  reorderUsers: (fromIndex: number, toIndex: number) => void;
-  moveUserUp: (index: number) => void;
-  moveUserDown: (index: number) => void;
-  
-  updateSettings: (settings: Partial<ExportSettings>) => void;
-  
-  setIsPlaying: (playing: boolean) => void;
-  setIsExporting: (exporting: boolean) => void;
-  setExportProgress: (progress: number) => void;
-  setPreviewRef: (ref: HTMLElement | null) => void;
-  setFfmpegLoaded: (loaded: boolean) => void;
-  
-  updateProjectName: (name: string) => void;
-  updateChatTitle: (title: string) => void;
-  setChatType: (type: ChatType) => void;
-  updateGroupInfo: (info: Partial<GroupInfo>) => void;
-  
-  exportProject: () => ExportableProject;
-  importProject: (data: ExportableProject) => void;
-  setProject: (project: ChatProject) => void;
-}
-
-export const useChatStore = create<ChatState>((set) => ({
-  project: {
+// Helper functions
+function createDefaultProject(): StoredProject {
+  return {
     id: nanoid(),
     name: '新对话',
     chatTitle: '聊天记录',
     chatType: 'private',
     groupInfo: undefined,
     platform: wechatTheme,
-    users: defaultUsers,
+    users: defaultUsers.map(u => ({ ...u, id: nanoid() })),
     messages: [],
-    settings: defaultExportSettings,
-  },
-  selectedPlatform: wechatTheme,
+    settings: { ...defaultExportSettings },
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+function loadProjects(): StoredProject[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Failed to load projects:', e);
+  }
+  return [];
+}
+
+function saveProjects(projects: StoredProject[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+  } catch (e) {
+    console.error('Failed to save projects:', e);
+  }
+}
+
+function loadUserSettings(): UserSettings {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.USER_SETTINGS);
+    if (data) {
+      return { ...defaultUserSettings, ...JSON.parse(data) };
+    }
+  } catch (e) {
+    console.error('Failed to load user settings:', e);
+  }
+  return defaultUserSettings;
+}
+
+function saveUserSettings(settings: UserSettings): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.USER_SETTINGS, JSON.stringify(settings));
+  } catch (e) {
+    console.error('Failed to save user settings:', e);
+  }
+}
+
+// Initialize from storage
+const initialProjects = loadProjects();
+const initialUserSettings = loadUserSettings();
+
+// Get initial project (last opened or create new)
+function getInitialProject(): { project: StoredProject; projects: StoredProject[] } {
+  let projects = initialProjects;
+  let project: StoredProject;
+  
+  if (projects.length === 0) {
+    // Create first project
+    project = createDefaultProject();
+    projects = [project];
+    saveProjects(projects);
+  } else if (initialUserSettings.lastProjectId && projects.find(p => p.id === initialUserSettings.lastProjectId)) {
+    // Load last opened project
+    project = projects.find(p => p.id === initialUserSettings.lastProjectId)!;
+  } else {
+    // Load most recent project
+    projects.sort((a, b) => b.updatedAt - a.updatedAt);
+    project = projects[0];
+  }
+  
+  return { project, projects };
+}
+
+const { project: initialProject, projects: initialLoadedProjects } = getInitialProject();
+
+export const useChatStore = create<ChatState>((set, get) => ({
+  // Initial state
+  projects: initialLoadedProjects,
+  currentProjectId: initialProject.id,
+  userSettings: initialUserSettings,
+  project: initialProject,
+  selectedPlatform: initialProject.platform,
   isPlaying: false,
   isExporting: false,
   exportProgress: 0,
@@ -98,105 +142,322 @@ export const useChatStore = create<ChatState>((set) => ({
   ffmpegLoaded: false,
   exportingVideoVisibleCount: 0,
 
+  // Project management
+  createProject: () => {
+    const newProject = createDefaultProject();
+    set(state => {
+      const newProjects = [newProject, ...state.projects];
+      saveProjects(newProjects);
+      return {
+        projects: newProjects,
+        currentProjectId: newProject.id,
+        project: newProject,
+        selectedPlatform: newProject.platform,
+      };
+    });
+    get().updateUserSettings({ lastProjectId: newProject.id });
+  },
+
+  loadProject: (id: string) => {
+    const state = get();
+    const project = state.projects.find(p => p.id === id);
+    if (project) {
+      // Save current project first
+      state.saveCurrentProject();
+      
+      set({
+        currentProjectId: id,
+        project,
+        selectedPlatform: project.platform,
+      });
+      
+      // Update last project ID
+      get().updateUserSettings({ lastProjectId: id });
+    }
+  },
+
+  deleteProject: (id: string) => {
+    set(state => {
+      const newProjects = state.projects.filter(p => p.id !== id);
+      
+      // If deleting current project, switch to another
+      let newCurrentId = state.currentProjectId;
+      let newProject = state.project;
+      
+      if (id === state.currentProjectId) {
+        if (newProjects.length > 0) {
+          newCurrentId = newProjects[0].id;
+          newProject = newProjects[0];
+        } else {
+          // Create new project if all deleted
+          newProject = createDefaultProject();
+          newProjects.push(newProject);
+          newCurrentId = newProject.id;
+        }
+      }
+      
+      saveProjects(newProjects);
+      
+      // Update last project ID if needed
+      if (id === state.userSettings.lastProjectId) {
+        get().updateUserSettings({ lastProjectId: newCurrentId || undefined });
+      }
+      
+      return {
+        projects: newProjects,
+        currentProjectId: newCurrentId,
+        project: newProject,
+        selectedPlatform: newProject.platform,
+      };
+    });
+  },
+
+  duplicateProject: (id: string) => {
+    const state = get();
+    const sourceProject = state.projects.find(p => p.id === id);
+    if (sourceProject) {
+      const newProject: StoredProject = {
+        ...sourceProject,
+        id: nanoid(),
+        name: `${sourceProject.name} (副本)`,
+        messages: sourceProject.messages.map(m => ({ ...m, id: nanoid() })),
+        users: sourceProject.users.map(u => ({ ...u, id: nanoid() })),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      
+      set(state => {
+        const newProjects = [newProject, ...state.projects];
+        saveProjects(newProjects);
+        return {
+          projects: newProjects,
+          currentProjectId: newProject.id,
+          project: newProject,
+          selectedPlatform: newProject.platform,
+        };
+      });
+      
+      get().updateUserSettings({ lastProjectId: newProject.id });
+    }
+  },
+
+  saveCurrentProject: () => {
+    const state = get();
+    const projectToSave: StoredProject = {
+      ...state.project,
+      updatedAt: Date.now(),
+    };
+    
+    set(state => {
+      const newProjects = state.projects.map(p => 
+        p.id === projectToSave.id ? projectToSave : p
+      );
+      saveProjects(newProjects);
+      return { projects: newProjects };
+    });
+  },
+
+  updateProjectMetadata: (metadata: Partial<StoredProject>) => {
+    set(state => {
+      const updatedProject = { ...state.project, ...metadata, updatedAt: Date.now() } as StoredProject;
+      const newProjects = state.projects.map(p => 
+        p.id === state.project.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      return { project: updatedProject };
+    });
+  },
+
+  // User settings
+  updateUserSettings: (settings: Partial<UserSettings>) => {
+    set(state => {
+      const newSettings = { ...state.userSettings, ...settings };
+      saveUserSettings(newSettings);
+      return { userSettings: newSettings };
+    });
+  },
+
   setExportingVideoVisibleCount: (count: number) => set({ exportingVideoVisibleCount: count }),
 
   setPlatform: (platform) =>
     set((state) => {
       const dims = getDefaultDimensions(platform);
+      const updatedProject = {
+        ...state.project,
+        platform,
+        settings: {
+          ...state.project.settings,
+          width: dims.width,
+          height: dims.height,
+        },
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
       return {
         selectedPlatform: platform,
-        project: {
-          ...state.project,
-          platform,
-          settings: {
-            ...state.project.settings,
-            width: dims.width,
-            height: dims.height,
-          },
-        },
+        project: updatedProject,
+        projects: newProjects,
       };
     }),
 
-  addMessage: (message) =>
-    set((state) => ({
-      project: {
+  addMessage: (message: Partial<Message>) =>
+    set((state) => {
+      const newMessage = { ...message, id: nanoid() } as Message;
+      const updatedProject: StoredProject = {
         ...state.project,
-        messages: [...state.project.messages, { ...message, id: nanoid() }],
-      },
-    })),
+        messages: [...state.project.messages, newMessage],
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   updateMessage: (id, updates) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         messages: state.project.messages.map((msg) =>
           msg.id === id ? { ...msg, ...updates } : msg
         ),
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   deleteMessage: (id) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         messages: state.project.messages.filter((msg) => msg.id !== id),
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   setMessages: (messages) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         messages,
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   clearMessages: () =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         messages: [],
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   reorderMessages: (fromIndex, toIndex) =>
     set((state) => {
       const messages = [...state.project.messages];
       const [removed] = messages.splice(fromIndex, 1);
       messages.splice(toIndex, 0, removed);
-      return {
-        project: {
-          ...state.project,
-          messages,
-        },
+      
+      const updatedProject = {
+        ...state.project,
+        messages,
+        updatedAt: Date.now(),
       };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
     }),
 
-  addUser: (user) =>
-    set((state) => ({
-      project: {
+  addUser: (user: Partial<UserProfile>) =>
+    set((state) => {
+      const newUser: UserProfile = { ...user, id: nanoid() } as UserProfile;
+      const updatedProject: StoredProject = {
         ...state.project,
-        users: [...state.project.users, { ...user, id: nanoid() }],
-      },
-    })),
+        users: [...state.project.users, newUser],
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
-  updateUser: (id, updates) =>
-    set((state) => ({
-      project: {
+  updateUser: (id: string, updates: Partial<UserProfile>) =>
+    set((state) => {
+      const updatedProject: StoredProject = {
         ...state.project,
         users: state.project.users.map((user) =>
-          user.id === id ? { ...user, ...updates } : user
+          user.id === id ? { ...user, ...updates } as UserProfile : user
         ),
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   deleteUser: (id) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         users: state.project.users.filter((user) => user.id !== id),
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   reorderUsers: (fromIndex, toIndex) =>
     set((state) => {
@@ -204,26 +465,30 @@ export const useChatStore = create<ChatState>((set) => ({
       const [removed] = users.splice(fromIndex, 1);
       users.splice(toIndex, 0, removed);
       
-      // 更新角色：第一个是 user，其他是 assistant
       const updatedUsers = users.map((user, index) => ({
         ...user,
         role: index === 0 ? 'user' as const : 'assistant' as const,
       }));
       
-      // 同时更新消息的角色
       const userNameRoleMap = new Map(updatedUsers.map((u, i) => [u.name, i === 0 ? 'user' as const : 'assistant' as const]));
       const updatedMessages = state.project.messages.map(msg => ({
         ...msg,
         role: userNameRoleMap.get(msg.sender) || msg.role,
       }));
       
-      return {
-        project: {
-          ...state.project,
-          users: updatedUsers,
-          messages: updatedMessages,
-        },
+      const updatedProject = {
+        ...state.project,
+        users: updatedUsers,
+        messages: updatedMessages,
+        updatedAt: Date.now(),
       };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
     }),
 
   moveUserUp: (index) =>
@@ -232,26 +497,30 @@ export const useChatStore = create<ChatState>((set) => ({
       const users = [...state.project.users];
       [users[index - 1], users[index]] = [users[index], users[index - 1]];
       
-      // 更新角色
       const updatedUsers = users.map((user, i) => ({
         ...user,
         role: i === 0 ? 'user' as const : 'assistant' as const,
       }));
       
-      // 同时更新消息的角色
       const userNameRoleMap = new Map(updatedUsers.map((u, i) => [u.name, i === 0 ? 'user' as const : 'assistant' as const]));
       const updatedMessages = state.project.messages.map(msg => ({
         ...msg,
         role: userNameRoleMap.get(msg.sender) || msg.role,
       }));
       
-      return {
-        project: {
-          ...state.project,
-          users: updatedUsers,
-          messages: updatedMessages,
-        },
+      const updatedProject = {
+        ...state.project,
+        users: updatedUsers,
+        messages: updatedMessages,
+        updatedAt: Date.now(),
       };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
     }),
 
   moveUserDown: (index) =>
@@ -260,35 +529,47 @@ export const useChatStore = create<ChatState>((set) => ({
       const users = [...state.project.users];
       [users[index], users[index + 1]] = [users[index + 1], users[index]];
       
-      // 更新角色
       const updatedUsers = users.map((user, i) => ({
         ...user,
         role: i === 0 ? 'user' as const : 'assistant' as const,
       }));
       
-      // 同时更新消息的角色
       const userNameRoleMap = new Map(updatedUsers.map((u, i) => [u.name, i === 0 ? 'user' as const : 'assistant' as const]));
       const updatedMessages = state.project.messages.map(msg => ({
         ...msg,
         role: userNameRoleMap.get(msg.sender) || msg.role,
       }));
       
-      return {
-        project: {
-          ...state.project,
-          users: updatedUsers,
-          messages: updatedMessages,
-        },
+      const updatedProject = {
+        ...state.project,
+        users: updatedUsers,
+        messages: updatedMessages,
+        updatedAt: Date.now(),
       };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
     }),
 
   updateSettings: (settings) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         settings: { ...state.project.settings, ...settings },
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   setIsPlaying: (playing) => set({ isPlaying: playing }),
 
@@ -301,45 +582,77 @@ export const useChatStore = create<ChatState>((set) => ({
   setFfmpegLoaded: (loaded) => set({ ffmpegLoaded: loaded }),
 
   updateProjectName: (name) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         name,
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   updateChatTitle: (title) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         chatTitle: title,
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   setChatType: (type) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         chatType: type,
         groupInfo: type === 'group' 
           ? (state.project.groupInfo || { name: state.project.chatTitle || '群聊' })
           : undefined,
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   updateGroupInfo: (info) =>
-    set((state) => ({
-      project: {
+    set((state) => {
+      const updatedProject = {
         ...state.project,
         groupInfo: {
           ...(state.project.groupInfo || { name: state.project.chatTitle || '群聊' }),
           ...info,
         },
-      },
-    })),
+        updatedAt: Date.now(),
+      };
+      
+      const newProjects = state.projects.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      );
+      saveProjects(newProjects);
+      
+      return { project: updatedProject, projects: newProjects };
+    }),
 
   exportProject: () => {
-    const state = useChatStore.getState() as ChatState;
+    const state = get();
     const { id, ...projectData } = state.project;
     return {
       version: '1.0.0',
@@ -352,11 +665,23 @@ export const useChatStore = create<ChatState>((set) => ({
     if (!data.project) {
       throw new Error('无效的项目数据');
     }
-    set({
-      project: {
-        ...data.project,
-        id: nanoid(),
-      },
+    
+    const newProject: StoredProject = {
+      ...data.project,
+      id: nanoid(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    set((state) => {
+      const newProjects = [newProject, ...state.projects];
+      saveProjects(newProjects);
+      return {
+        projects: newProjects,
+        currentProjectId: newProject.id,
+        project: newProject,
+        selectedPlatform: newProject.platform,
+      };
     });
   },
 

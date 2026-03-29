@@ -15,7 +15,6 @@ export default function ExportPanel() {
   const config = getPlatformConfig(platform.id);
   const isMobile = config.deviceType === 'mobile';
 
-  // 计算预览缩放尺寸
   const previewDimensions = useMemo(() => {
     const targetHeight = 400;
     const targetWidth = 500;
@@ -54,9 +53,6 @@ export default function ExportPanel() {
 
       const title = project.chatTitle || platform.name;
 
-      // =========================================================================
-      // 直接用 Canvas 渲染器导出，保证布局正确
-      // =========================================================================
       setExportProgress(50);
       const blob = await exporter.captureImageFromCanvas(
         messages,
@@ -197,24 +193,24 @@ export default function ExportPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">导出设置</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">导出设置</h2>
         
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">导出格式</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">导出格式</label>
             <select
               value={exportType}
               onChange={e => setExportType(e.target.value as 'image' | 'video')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="image">图片 (PNG)</option>
               <option value="video">视频 (MP4)</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">输出尺寸</label>
-            <div className="px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">输出尺寸</label>
+            <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white">
               {settings.width} × {settings.height} ({platform.ratio})
             </div>
           </div>
@@ -223,42 +219,42 @@ export default function ExportPanel() {
         {exportType === 'video' && (
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">帧率 (FPS)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">帧率 (FPS)</label>
               <input
                 type="number"
                 value={settings.fps}
                 onChange={e => useChatStore.getState().updateSettings({ fps: Number(e.target.value) })}
                 min="15"
                 max="60"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">视频码率 (kbps)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">视频码率 (kbps)</label>
               <input
                 type="number"
                 value={settings.videoBitrate}
                 onChange={e => useChatStore.getState().updateSettings({ videoBitrate: Number(e.target.value) })}
                 min="500"
                 max="5000"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
           </div>
         )}
 
-        <div className="text-sm text-gray-500 mb-4">
+        <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           消息数量: {messages.length} 条
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-red-600 dark:text-red-400 text-sm">
             {error}
           </div>
         )}
 
         {status && !error && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-600 text-sm">
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg text-blue-600 dark:text-blue-400 text-sm">
             {status}
           </div>
         )}
@@ -284,7 +280,7 @@ export default function ExportPanel() {
           <button
             onClick={handleExportHtml}
             disabled={messages.length === 0}
-            className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
           >
             导出 HTML (可用浏览器打印为 PDF/图片)
           </button>
@@ -292,21 +288,21 @@ export default function ExportPanel() {
 
         {isExporting && (
           <div className="mt-4">
-            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-blue-500 transition-all duration-300"
                 style={{ width: `${useChatStore.getState().exportProgress}%` }}
               />
             </div>
-            <div className="text-sm text-gray-500 mt-1 text-center">
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 text-center">
               导出进度: {useChatStore.getState().exportProgress}%
             </div>
           </div>
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">导出预览 ({settings.width}×{settings.height})</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">导出预览 ({settings.width}×{settings.height})</h2>
         <div className="flex justify-center">
           <div 
             id="chat-export-container"
@@ -322,28 +318,28 @@ export default function ExportPanel() {
             />
           </div>
         </div>
-        <p className="text-xs text-gray-400 text-center mt-2">
+        <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-2">
           预览已缩放，实际导出为 {settings.width}×{settings.height} 像素
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">实际导出尺寸</h2>
-        <div className="text-center text-2xl font-mono">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">实际导出尺寸</h2>
+        <div className="text-center text-2xl font-mono text-gray-900 dark:text-white">
           {settings.width} × {settings.height}
         </div>
-        <p className="text-sm text-gray-500 text-center mt-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-2">
           内容将按预览比例渲染，确保换行一致
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">使用说明</h2>
-        <div className="text-sm text-gray-600 space-y-2">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">使用说明</h2>
+        <div className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
           <p>1. 在「编辑」页面添加或导入对话内容</p>
           <p>2. 在「预览」页面查看动画效果</p>
           <p>3. 返回「导出」页面点击导出按钮</p>
-          <p className="text-orange-500">注意：导出视频需要加载 FFmpeg，首次加载可能需要 10-20 秒</p>
+          <p className="text-orange-500 dark:text-orange-400">注意：导出视频需要加载 FFmpeg，首次加载可能需要 10-20 秒</p>
         </div>
       </div>
     </div>

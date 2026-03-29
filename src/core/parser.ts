@@ -159,11 +159,27 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
   const senderSet = new Set<string>();
   
   // 第一遍：收集所有发送者（按出现顺序）
+  // 同时将 "用户A"/"用户B" 映射到已有用户的名称
+  const defaultSenderMapping = new Map<string, string>();
+  
   for (const line of mergedLines) {
     const parsed = parseLine(line);
-    if (parsed && parsed.sender && !senderSet.has(parsed.sender)) {
-      senderSet.add(parsed.sender);
-      discoveredSenders.push(parsed.sender);
+    if (parsed && parsed.sender) {
+      let actualSender = parsed.sender;
+      
+      // 如果是默认的 "用户A" 或 "用户B"，尝试映射到已有用户
+      if ((parsed.sender === '用户A' || parsed.sender === '用户B') && users.length > 0) {
+        const existingSender = discoveredSenders.length > 0 ? discoveredSenders[0] : null;
+        if (existingSender && existingSender !== '用户A' && existingSender !== '用户B') {
+          actualSender = existingSender;
+          defaultSenderMapping.set(parsed.sender, existingSender);
+        }
+      }
+      
+      if (!senderSet.has(actualSender)) {
+        senderSet.add(actualSender);
+        discoveredSenders.push(actualSender);
+      }
     }
   }
 
@@ -197,7 +213,8 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
     
     if (!parsed || !parsed.content || !parsed.sender) continue;
 
-    const sender = parsed.sender;
+    // 应用 sender 映射（将 "用户A"/"用户B" 映射到实际用户名）
+    let sender = defaultSenderMapping.get(parsed.sender) || parsed.sender;
     const role = roleAssignment.get(sender) || 'user';
 
     // 查找匹配的用户配置

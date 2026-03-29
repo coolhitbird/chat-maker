@@ -56,7 +56,7 @@ export default function MessageContent({
     // 语音消息
     if (message?.type === 'voice' && message.voice) {
       // DEBUG
-      console.log('[Voice] message.voice:', JSON.stringify(message.voice, null, 2));
+      console.log('[MessageContent - Voice] scale from props:', scale);
       return (
         <components.voice 
           data={message.voice} 

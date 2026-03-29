@@ -55,11 +55,11 @@ export default function MessageInput() {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">发送者</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">发送者</label>
         <select
           value={sender}
           onChange={e => setSender(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         >
           {project.users.map(user => (
             <option key={user.id} value={user.name}>{user.name}</option>
@@ -67,19 +67,19 @@ export default function MessageInput() {
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">消息内容</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">消息内容</label>
         <div className="relative" ref={pickerRef}>
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
             placeholder="输入消息内容，支持微信表情如 [微笑]..."
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           />
           <button
             type="button"
             onClick={() => setShowEmoji(!showEmoji)}
-            className="absolute right-2 bottom-2 p-1 text-gray-500 hover:text-gray-700 transition-colors"
+            className="absolute right-2 bottom-2 p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             title="插入表情"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,7 +90,7 @@ export default function MessageInput() {
             <EmojiPicker onSelect={handleEmojiSelect} />
           )}
         </div>
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           提示：输入 [微笑] 等表情代码，或点击表情按钮选择
         </p>
       </div>

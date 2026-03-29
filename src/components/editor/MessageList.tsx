@@ -7,7 +7,7 @@ export default function MessageList() {
 
   if (messages.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
         暂无消息，请添加或导入对话内容
       </div>
     );

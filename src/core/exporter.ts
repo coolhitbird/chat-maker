@@ -334,7 +334,8 @@ export class Exporter {
     width: number,
     height: number,
     title: string,
-    users: UserProfile[]
+    users: UserProfile[],
+    darkMode: boolean = false
   ): Promise<Blob> {
     const canvas = document.createElement('canvas');
     const { renderChatToCanvas, canvasToBlob: canvasToBlobUtil } = await import('./canvasRenderer');
@@ -344,6 +345,7 @@ export class Exporter {
       width,
       height,
       title,
+      darkMode,
       styles: { ...styles, background: styles.background, bubblePadding: styles.bubblePadding }
     });
     
@@ -354,6 +356,7 @@ export class Exporter {
       title,
       messages,
       users,
+      darkMode,
     });
     
     return canvasToBlobUtil(canvas);
@@ -365,9 +368,10 @@ export class Exporter {
     width: number,
     height: number,
     title: string,
-    users: UserProfile[]
+    users: UserProfile[],
+    darkMode: boolean = false
   ): Promise<Blob> {
-    return this.captureImageFromCanvas(messages, styles, width, height, title, users);
+    return this.captureImageFromCanvas(messages, styles, width, height, title, users, darkMode);
   }
 
   async recordVideo(
@@ -375,7 +379,8 @@ export class Exporter {
     messages: Message[],
     settings: ExportSettings,
     platformConfig: PlatformExportConfig,
-    onProgress: (progress: number) => void
+    onProgress: (progress: number) => void,
+    darkMode: boolean = false
   ): Promise<Blob> {
     if (!this.ffmpeg || !this.loaded) {
       await this.init();
@@ -425,6 +430,7 @@ export class Exporter {
         messages: messages.slice(0, i + 1),
         users: [],
         imageCache,
+        darkMode,
       });
 
       const totalContentHeight = canvas.height / dpr;
@@ -480,6 +486,7 @@ export class Exporter {
         messages,
         users: [],
         imageCache,
+        darkMode,
       });
       
       const pauseBlob = await canvasToBlobUtil(pauseCanvas);

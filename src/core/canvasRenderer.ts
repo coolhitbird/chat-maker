@@ -93,27 +93,53 @@ function measureTextWidth(ctx: CanvasRenderingContext2D, text: string): number {
   return ctx.measureText(text).width;
 }
 
-// 计算单行文本的行数（用于语音转文字等场景）
+// 计算文本的行数（与 wrapTextFragments 保持一致的换行逻辑）
 function countTextLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number, fontFamily: string): number {
   if (!text) return 1;
-  let lineCount = 1;
-  let currentLineWidth = 0;
   
   ctx.font = `${fontSize}px "${fontFamily}"`;
-  for (const char of text) {
-    const charWidth = measureTextWidth(ctx, char);
-    if (currentLineWidth + charWidth > maxWidth && currentLineWidth > 0) {
-      lineCount++;
-      currentLineWidth = charWidth;
-    } else {
-      currentLineWidth += charWidth;
-    }
-  }
   
-  return lineCount;
+  const isChinese = /[\u4e00-\u9fa5]/.test(text);
+  
+  if (isChinese || !text.includes(' ')) {
+    // 中文或无空格文本：按字符换行
+    let lineCount = 1;
+    let part = '';
+    
+    for (const char of text) {
+      const newWidth = measureTextWidth(ctx, part + char);
+      if (newWidth > maxWidth && part) {
+        lineCount++;
+        part = char;
+      } else {
+        part += char;
+      }
+    }
+    
+    return lineCount;
+  } else {
+    // 英文文本：按单词换行
+    const words = text.split(' ');
+    let lineCount = 1;
+    let currentLineWidth = 0;
+    
+    for (const word of words) {
+      const wordWidth = measureTextWidth(ctx, word);
+      const spaceWidth = measureTextWidth(ctx, ' ');
+      
+      if (currentLineWidth + wordWidth > maxWidth && currentLineWidth > 0) {
+        lineCount++;
+        currentLineWidth = wordWidth;
+      } else {
+        currentLineWidth += wordWidth + spaceWidth;
+      }
+    }
+    
+    return lineCount;
+  }
 }
 
-// Wrap text - 使用简单的字符级换行逻辑
+// Wrap text - 按单词换行（英文保持单词完整，中文按字符换行）
 function wrapTextFragments(
   ctx: CanvasRenderingContext2D,
   fragments: TextFragment[],
@@ -138,27 +164,67 @@ function wrapTextFragments(
     }
 
     const text = fragment.content;
-    // 按字符处理，模拟 CSS word-break: break-all
-    let part = '';
+    const isChinese = /[\u4e00-\u9fa5]/.test(text);
     
-    for (const char of text) {
-      const newWidth = measureTextWidth(ctx, part + char);
+    if (isChinese || !text.includes(' ')) {
+      // 中文或无空格文本：按字符换行
+      let part = '';
       
-      if (newWidth > maxWidth && part) {
-        // 当前行放不下新字符，换行
-        currentLine.push({ type: 'text', content: part });
-        lines.push(currentLine);
-        currentLine = [];
-        currentLineWidth = 0;
-        part = char;
-      } else {
-        part += char;
+      for (const char of text) {
+        const newWidth = measureTextWidth(ctx, part + char);
+        
+        if (newWidth > maxWidth && part) {
+          currentLine.push({ type: 'text', content: part });
+          lines.push(currentLine);
+          currentLine = [];
+          currentLineWidth = 0;
+          part = char;
+        } else {
+          part += char;
+        }
       }
-    }
-    
-    if (part) {
-      currentLine.push({ type: 'text', content: part });
-      currentLineWidth = measureTextWidth(ctx, part);
+      
+      if (part) {
+        currentLine.push({ type: 'text', content: part });
+        currentLineWidth = measureTextWidth(ctx, part);
+      }
+    } else {
+      // 英文文本：按单词换行
+      const words = text.split(' ');
+      
+      for (const word of words) {
+        const wordWidth = measureTextWidth(ctx, word);
+        
+        if (currentLineWidth + wordWidth > maxWidth && currentLine.length > 0) {
+          lines.push(currentLine);
+          currentLine = [];
+          currentLineWidth = 0;
+        }
+        
+        if (wordWidth > maxWidth) {
+          // 单词本身超过宽度，按字符换行
+          let part = '';
+          for (const char of word) {
+            const charWidth = measureTextWidth(ctx, part + char);
+            if (charWidth > maxWidth && part) {
+              currentLine.push({ type: 'text', content: part });
+              lines.push(currentLine);
+              currentLine = [];
+              currentLineWidth = 0;
+              part = char;
+            } else {
+              part += char;
+            }
+          }
+          if (part) {
+            currentLine.push({ type: 'text', content: part });
+            currentLineWidth += measureTextWidth(ctx, part);
+          }
+        } else {
+          currentLine.push({ type: 'text', content: word });
+          currentLineWidth += wordWidth + measureTextWidth(ctx, ' '); // 空格宽度
+        }
+      }
     }
   }
 
@@ -181,6 +247,8 @@ export interface RenderOptions {
   emojiCache?: Map<string, HTMLImageElement>;
   /** 预加载好的消息图片缓存（由调用方异步预加载后传入）*/
   imageCache?: Map<string, HTMLImageElement>;
+  /** 深色模式 */
+  darkMode?: boolean;
 }
 
 /** 同步预加载一组图片（通过 XHR），返回 Map */
@@ -237,7 +305,7 @@ function getGlobalEmojiCache(): Map<string, HTMLImageElement> {
 }
 
 export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOptions): void {
-  const { width, height, styles, title, messages, users, emojiCache, imageCache } = options;
+  const { width, height, styles, title, messages, users, emojiCache, imageCache, darkMode = false } = options;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -260,8 +328,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const lineHeightRatio = 1.4;
   const contentPadding = styles.messageGap;
 
-  // DEBUG: 检查 fontSize
-  console.log(`[Canvas] fontSize: ${fontSize}, width: ${width}, avatarSize: ${avatarSize}`);
+
   
   // Emoji size = 1.2x font size (微信表情实际比例)
   const emojiSize = Math.round(fontSize * 1.2);
@@ -280,10 +347,12 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   // 红包消息的固定高度（主体区域70px + 底部32px）
   const redPacketHeight = 102;
   
+  // 行高在循环外计算一次
+  const lineHeightPx = fontSize * lineHeightRatio;
+  
   const messageData = messages.map(msg => {
     const fragments = parseFragments(msg.content);
     const lines = wrapTextFragments(ctx, fragments, maxBubbleWidth - bubblePaddingH * 2, emojiSize);
-    const lineHeightPx = fontSize * lineHeightRatio;
     const textHeight = lines.length * lineHeightPx;
     
     // 特殊消息使用固定高度，普通消息使用文字高度
@@ -301,35 +370,24 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       bubbleHeight = textHeight + bubblePaddingV * 2;
     }
 
-    return { msg, fragments, lines, lineHeightPx, bubbleHeight, voiceTextLineCount: 0 };
+    return { msg, fragments, lines, bubbleHeight };
   });
 
-  // Calculate total height needed
-  // 每行高度 = max(头像高度, 用户名高度 + 气泡高度) + 间距
-  let totalContentHeight = contentPadding;
+  // 第一次计算：估算语音消息高度（用于设置 canvas 大小）
   for (const data of messageData) {
-    let actualBubbleHeight = data.bubbleHeight;
-    
-    // 如果是语音消息且有文字，需要根据文字行数动态计算高度
     if (data.msg.type === 'voice' && data.msg.voice && data.msg.voice.text) {
       const voiceText = data.msg.voice.text;
-      // 使用与渲染完全相同的 bubblePaddingH
-      const voiceMinWidth = Math.min(200, (data.msg.voice.duration || 5) * 20 + 100);
-      const voiceBubbleWidth = Math.min(voiceMinWidth + bubblePaddingH * 2, maxBubbleWidth);
-      const voiceTextMaxWidth = voiceBubbleWidth - bubblePaddingH * 4;
-      
-      // 使用统一的函数计算行数（使用与渲染相同的 fontSize、lineHeightRatio 和 fontFamily）
-      const voiceLineHeight = fontSize * lineHeightRatio;
-      const voiceLineCount = countTextLines(ctx, voiceText, voiceTextMaxWidth, fontSize, styles.fontFamily);
-      
-      // 文字区域高度 = 行数 * 行高（无额外 padding，更紧凑）
-      const voiceTextAreaHeight = voiceLineCount * voiceLineHeight;
-      actualBubbleHeight = 40 + voiceTextAreaHeight; // 波形40 + 文字区域
-      data.bubbleHeight = actualBubbleHeight;
-      data.voiceTextLineCount = voiceLineCount;
+      // 估算：假设每行约 15 字符
+      const estimatedLines = Math.ceil(voiceText.length / 15);
+      const estimatedHeight = 40 + estimatedLines * lineHeightPx;
+      data.bubbleHeight = estimatedHeight;
     }
-    
-    const contentHeight = senderNameHeight + actualBubbleHeight;
+  }
+
+  // Calculate total height needed
+  let totalContentHeight = contentPadding;
+  for (const data of messageData) {
+    const contentHeight = senderNameHeight + data.bubbleHeight;
     const rowHeight = Math.max(avatarSize, contentHeight) + gap;
     totalContentHeight += rowHeight;
   }
@@ -350,17 +408,19 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   // ============================================================================
   // Draw background
   // ============================================================================
-  ctx.fillStyle = styles.background;
+  ctx.fillStyle = darkMode ? '#1f1f1f' : styles.background;
   ctx.fillRect(0, 0, width, actualHeight);
 
   // ============================================================================
   // Draw status bar (mobile only)
   // ============================================================================
   if (isMobile) {
-    ctx.fillStyle = styles.headerBg;
+    const statusBg = darkMode ? '#1a1a1a' : styles.headerBg;
+    const statusColor = darkMode ? '#888' : styles.headerColor;
+    ctx.fillStyle = statusBg;
     ctx.fillRect(0, 0, width, statusBarHeight);
 
-    ctx.fillStyle = styles.headerColor;
+    ctx.fillStyle = statusColor;
     ctx.font = `500 10px "${styles.fontFamily.replace(/"/g, '')}"`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -369,7 +429,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     // Signal bars
     const signalX = width - 80;
     const signalY = statusBarHeight / 2;
-    ctx.fillStyle = styles.headerColor;
+    ctx.fillStyle = statusColor;
     for (let i = 0; i < 4; i++) {
       const barH = 4 + i * 2;
       ctx.fillRect(signalX + i * 5, signalY - barH / 2, 3, barH);
@@ -389,7 +449,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
 
     // Battery icon
     const batteryX = width - 30;
-    ctx.strokeStyle = styles.headerColor;
+    ctx.strokeStyle = statusColor;
     ctx.lineWidth = 1;
     ctx.strokeRect(batteryX, signalY - 4, 16, 8);
     ctx.fillRect(batteryX + 1, signalY - 3, 12, 6);
@@ -399,12 +459,13 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   // ============================================================================
   // Draw header
   // ============================================================================
-  ctx.fillStyle = styles.headerBg;
+  ctx.fillStyle = darkMode ? '#2d2d2d' : styles.headerBg;
   ctx.fillRect(0, statusBarHeight, width, headerHeight);
 
-  ctx.fillStyle = styles.headerColor;
-  ctx.font = `600 ${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
-  ctx.textAlign = 'center';
+  const headerFontSize = Math.max(12, fontSize * 0.9);
+  ctx.fillStyle = darkMode ? '#ffffff' : styles.headerColor;
+  ctx.font = `500 ${headerFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(title, width / 2, statusBarHeight + headerHeight / 2);
 
@@ -420,11 +481,16 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const senderNameHeightPx = avatarSize * senderNameHeightRatio;
 
   for (const data of messageData) {
-    const { msg, lines, lineHeightPx } = data;
+    const { msg, lines } = data;
     const bubbleHeight = data.bubbleHeight;
     const isUser = msg.role === 'user';
-    const bubbleBg = isUser ? styles.bubbleRightBg : styles.bubbleLeftBg;
-    const bubbleColor = isUser ? styles.bubbleRightColor : styles.bubbleLeftColor;
+    // 深色模式下的气泡背景和文字颜色
+    const bubbleBg = darkMode 
+      ? (isUser ? '#128400' : '#2d2d2d') 
+      : (isUser ? styles.bubbleRightBg : styles.bubbleLeftBg);
+    const bubbleColor = darkMode 
+      ? '#ffffff' 
+      : (isUser ? styles.bubbleRightColor : styles.bubbleLeftColor);
 
     // 系统消息：居中显示
     if (msg.type === 'system' && msg.system) {
@@ -474,6 +540,10 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     ctx.textBaseline = 'bottom';
     ctx.fillText(msg.sender, senderX, senderY);
 
+    // 修复：使用正确的字体大小计算气泡宽度
+    // 在计算文字宽度前设置 fontSize，确保与渲染时的字体一致
+    ctx.font = `${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+    
     // Bubble dimensions - 气泡从用户名下方开始
     const maxLineWidth = Math.max(
       ...lines.map(line => {
@@ -490,8 +560,6 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const redPacketWidth = 180;
     // 转账消息的最小宽度
     const transferMinWidth = 180;
-    // 语音消息的最小宽度（根据时长）
-    const voiceMinWidth = msg.type === 'voice' ? Math.min(200, (msg.voice?.duration || 5) * 20 + 100) : 0;
     // 图片消息的固定宽度（正方形）
     const imageWidth = msg.type === 'image' ? 200 : 0;
     
@@ -499,16 +567,31 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     if (msg.type === 'redpacket') {
       actualMaxLineWidth = redPacketWidth;
     } else if (msg.type === 'transfer') {
-      // 转账消息使用最小宽度
       actualMaxLineWidth = Math.max(maxLineWidth, transferMinWidth);
-    } else if (msg.type === 'voice') {
-      // 语音消息只使用时长计算的宽度，不考虑内容宽度
-      actualMaxLineWidth = voiceMinWidth;
+    } else if (msg.type === 'voice' && msg.voice) {
+      // 语音消息宽度计算：图标(16) + 波形(可变) + 时长(估算30) + padding
+      const iconArea = 16;
+      const durationArea = 40;
+      const waveformArea = Math.max(60, (msg.voice.duration || 5) * 8 + 20);
+      const voiceControlWidth = bubblePaddingH + iconArea + bubblePaddingH + waveformArea + durationArea + bubblePaddingH;
+      
+      // 如果有文字，估算文字需要的宽度
+      let textWidth = 0;
+      if (msg.voice.text) {
+        const estimatedCharsPerLine = Math.floor((maxBubbleWidth - bubblePaddingH * 2) / (fontSize * 0.6));
+        const lines = Math.ceil(msg.voice.text.length / estimatedCharsPerLine);
+        if (lines === 1) {
+          ctx.font = `${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+          textWidth = Math.min(ctx.measureText(msg.voice.text).width + bubblePaddingH * 2, maxBubbleWidth);
+        } else {
+          textWidth = maxBubbleWidth;
+        }
+      }
+      
+      actualMaxLineWidth = Math.max(voiceControlWidth, textWidth);
     } else if (msg.type === 'image') {
-      // 图片消息使用固定宽度
       actualMaxLineWidth = imageWidth;
     } else {
-      // 普通文字消息：使用内容宽度
       actualMaxLineWidth = maxLineWidth;
     }
     
@@ -516,14 +599,18 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const bubbleX = isUser
       ? avatarX - gap - bubbleWidth
       : avatarX + gap + avatarSize;
-    // 气泡从用户名下方开始（y + senderNameHeightPx）
     const bubbleY = y + senderNameHeightPx;
     
-    // DEBUG: 语音消息的宽度计算
-    if (msg.type === 'voice' && msg.voice) {
-      console.log(`[RENDER-VOICE] actualMaxLineWidth=${actualMaxLineWidth}, bubblePaddingH=${bubblePaddingH}, bubbleWidth=${bubbleWidth}, maxBubbleWidth=${maxBubbleWidth}`);
-    }
-
+    // 语音消息：如果有文字，计算实际高度
+    const effectiveBubbleHeight = (msg.type === 'voice' && msg.voice && msg.voice.text)
+      ? (() => {
+        const voiceText = msg.voice.text;
+        const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+        const voiceLineCount = countTextLines(ctx, voiceText, textContentWidth, fontSize, styles.fontFamily);
+        return 40 + voiceLineCount * lineHeightPx;
+      })()
+      : bubbleHeight;
+    
     // ============================================================================
     // 核心修复 3: 添加 clip() 防止文字溢出（仅对普通文字消息）
     // ============================================================================
@@ -532,7 +619,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     
     // 只有普通消息才使用 clip，特殊消息不使用
     if (!isSpecialMessage) {
-      drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius, bubbleBg);
+      drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, effectiveBubbleHeight, bubbleRadius, bubbleBg);
       ctx.clip();
     }
 
@@ -688,17 +775,21 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + (s.footer?.height || 32) / 2);
       
     } else if (msg.type === 'voice' && msg.voice) {
-      // 绘制语音消息 - 波形居中，文字在波形下方
       const voice = msg.voice;
-      const padding = bubblePaddingH;
       const iconSize = 16;
       const waveHeight = 24;
       const barWidth = 3;
       const barGap = 2;
-      const waveCount = 20;
-      const waveAreaHeight = 40; // 波形区域高度（图标16 + padding 上下各 8）
-      const textLineHeight = fontSize * lineHeightRatio;
-      const textMaxWidth = bubbleWidth - padding * 4;
+      const waveAreaHeight = 40;
+      
+      // 时长文字宽度（估算）
+      const durationText = `${voice.duration}"`;
+      ctx.font = `12px "${styles.fontFamily.replace(/"/g, '')}"`;
+      const durationWidth = ctx.measureText(durationText).width + 8;
+      
+      // 波形区域宽度 = 气泡宽度 - 左侧padding - 图标 - 时长区域
+      const waveRegionWidth = bubbleWidth - bubblePaddingH * 2 - iconSize - bubblePaddingH - durationWidth;
+      const waveCount = Math.max(8, Math.floor(waveRegionWidth / (barWidth + barGap)));
       
       // 生成波形数据
       const waveformData: number[] = [];
@@ -707,13 +798,17 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       }
       
       // 语音气泡总高度
-      const voiceBubbleHeight = data.bubbleHeight;
+      const voiceBubbleHeight = effectiveBubbleHeight;
       
       // 绘制气泡背景
       drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, voiceBubbleHeight, bubbleRadius, bubbleBg);
       
+      // 计算波形区域的左右边界
+      const waveLeftX = bubbleX + bubblePaddingH + iconSize + bubblePaddingH;
+      const waveRightX = bubbleX + bubbleWidth - bubblePaddingH - durationWidth;
+      
       // 绘制播放图标（三角形）- 垂直居中
-      const iconX = bubbleX + padding;
+      const iconX = bubbleX + bubblePaddingH;
       const iconY = bubbleY + (waveAreaHeight - iconSize) / 2;
       ctx.fillStyle = bubbleColor;
       ctx.beginPath();
@@ -724,12 +819,14 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fill();
       
       // 绘制语音波形 - 垂直居中
-      const waveX = iconX + iconSize + padding;
       const waveY = bubbleY + (waveAreaHeight - waveHeight) / 2;
-      ctx.fillStyle = isUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.3)';
+      const waveColor = darkMode 
+        ? 'rgba(255,255,255,0.8)' 
+        : (isUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.3)');
+      ctx.fillStyle = waveColor;
       for (let i = 0; i < waveCount; i++) {
         const barH = (waveformData[i] * 0.8 + 0.2) * waveHeight;
-        const barX = waveX + i * (barWidth + barGap);
+        const barX = waveLeftX + i * (barWidth + barGap);
         const barY = waveY + (waveHeight - barH) / 2;
         ctx.beginPath();
         ctx.roundRect(barX, barY, barWidth, barH, 1);
@@ -737,43 +834,62 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       }
       
       // 绘制时长 - 垂直居中
-      ctx.fillStyle = isUser ? 'rgba(255,255,255,0.8)' : '#999';
+      ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.8)' : (isUser ? 'rgba(255,255,255,0.8)' : '#999');
       ctx.font = `12px "${styles.fontFamily.replace(/"/g, '')}"`;
-      ctx.textAlign = 'right';
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      const durationX = bubbleX + bubbleWidth - padding;
-      ctx.fillText(`${voice.duration}"`, durationX, bubbleY + waveAreaHeight / 2);
+      const durationX = waveRightX;
+      ctx.fillText(durationText, durationX, bubbleY + waveAreaHeight / 2);
       
-      // 绘制文字内容（如果有）- 在气泡内，波形下方
+      // 绘制语音转文字内容（如果有）
       if (voice.text) {
-        const textAreaY = bubbleY + waveAreaHeight;
-        const textContent = voice.text;
-        const textStartY = textAreaY;
+        const textColor = darkMode ? '#ffffff' : bubbleColor;
+        ctx.fillStyle = textColor;
+        ctx.textBaseline = 'middle';
         
-        // 绘制文字（使用重新计算的行数来定位）
-        ctx.fillStyle = bubbleColor;
-        ctx.font = `${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
+        const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+        const textTopPadding = 6;
+        const textBottomPadding = 6;
         
-        let line = '';
-        let lineY = textStartY;
+        const textFragments = parseFragments(voice.text);
+        const textLines = wrapTextFragments(ctx, textFragments, textContentWidth, emojiSize);
         
-        for (const char of textContent) {
-          const testLine = line + char;
-          const testWidth = ctx.measureText(testLine).width;
-          
-          if (testWidth > textMaxWidth && line) {
-            ctx.fillText(line, bubbleX + padding * 2, lineY);
-            line = char;
-            lineY += textLineHeight;
-          } else {
-            line = testLine;
-          }
+        const textAreaHeight = effectiveBubbleHeight - waveAreaHeight;
+        const totalTextHeight = textLines.length * lineHeightPx;
+        
+        // 计算文字区域可用空间
+        const availableHeight = textAreaHeight - textTopPadding - textBottomPadding;
+        
+        // 根据行数选择布局策略
+        let startY: number;
+        if (textLines.length === 1) {
+          // 单行：垂直居中于可用空间
+          startY = bubbleY + waveAreaHeight + textTopPadding + (availableHeight - totalTextHeight) / 2 + lineHeightPx / 2;
+        } else {
+          // 多行：从顶部开始填满可用空间
+          const multiLineTopPadding = (availableHeight - totalTextHeight) / 2;
+          startY = bubbleY + waveAreaHeight + Math.max(4, multiLineTopPadding) + lineHeightPx / 2;
         }
         
-        if (line) {
-          ctx.fillText(line, bubbleX + padding * 2, lineY);
+        for (let li = 0; li < textLines.length; li++) {
+          const lineY = startY + lineHeightPx * li;
+          let xOffset = 0;
+          
+          for (const frag of textLines[li]) {
+            if (frag.type === 'emoji') {
+              const cachedImg = emojiImgCache.get(frag.emojiUrl!);
+              if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+                const emojiY = lineY + (lineHeightPx - emojiSize) / 2;
+                ctx.drawImage(cachedImg, bubbleX + bubblePaddingH + xOffset, emojiY, emojiSize, emojiSize);
+              }
+              xOffset += emojiSize + 2;
+            } else {
+              const textX = bubbleX + bubblePaddingH + xOffset;
+              ctx.textAlign = 'left';
+              ctx.fillText(frag.content, textX, lineY);
+              xOffset += measureTextWidth(ctx, frag.content);
+            }
+          }
         }
       }
     } else if (msg.type === 'image' && msg.image) {
@@ -849,7 +965,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       // 绘制普通文字消息
       // Draw text + emoji content
       ctx.fillStyle = bubbleColor;
-      ctx.textBaseline = 'middle'; // 改为 'middle'，垂直居中
+      ctx.textBaseline = 'middle';
 
       // 文字垂直居中
       const totalTextHeight = lines.length * lineHeightPx;
@@ -859,27 +975,48 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
         // 每行的 Y 坐标 = 起始Y + 行高 * 行号
         const lineY = startY + lineHeightPx * li;
 
-        let xOffset = 0;
-        for (const frag of lines[li]) {
-          if (frag.type === 'emoji') {
-            // Draw emoji image - 垂直居中于文字行
-            const cachedImg = emojiImgCache.get(frag.emojiUrl!);
-            if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-              const emojiY = lineY + (lineHeightPx - emojiSize) / 2; // 垂直居中
-              ctx.drawImage(cachedImg, bubbleX + bubblePaddingH + xOffset, emojiY, emojiSize, emojiSize);
-            }
-            xOffset += emojiSize + 2;
-          } else {
-            // Draw text
-            const textX = bubbleX + bubblePaddingH + xOffset;
-            if (isUser) {
-              // Right-aligned: draw from right edge, text extends left
-              const textWidth = measureTextWidth(ctx, frag.content);
-              const rightEdgeX = bubbleX + bubbleWidth - bubblePaddingH;
-              ctx.textAlign = 'left';
-              ctx.fillText(frag.content, rightEdgeX - textWidth + xOffset, lineY);
-              xOffset += textWidth;
+        if (isUser) {
+          // Right-aligned: 先计算整行宽度，再从右向左绘制
+          let lineTotalWidth = 0;
+          for (const frag of lines[li]) {
+            if (frag.type === 'emoji') {
+              lineTotalWidth += emojiSize + 2;
             } else {
+              lineTotalWidth += measureTextWidth(ctx, frag.content);
+            }
+          }
+          
+          const rightEdgeX = bubbleX + bubbleWidth - bubblePaddingH;
+          let xOffset = rightEdgeX - lineTotalWidth;
+          
+          for (const frag of lines[li]) {
+            if (frag.type === 'emoji') {
+              const cachedImg = emojiImgCache.get(frag.emojiUrl!);
+              if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+                const emojiY = lineY + (lineHeightPx - emojiSize) / 2;
+                ctx.drawImage(cachedImg, xOffset, emojiY, emojiSize, emojiSize);
+              }
+              xOffset += emojiSize + 2;
+            } else {
+              const textWidth = measureTextWidth(ctx, frag.content);
+              ctx.textAlign = 'left';
+              ctx.fillText(frag.content, xOffset, lineY);
+              xOffset += textWidth;
+            }
+          }
+        } else {
+          // Left-aligned
+          let xOffset = 0;
+          for (const frag of lines[li]) {
+            if (frag.type === 'emoji') {
+              const cachedImg = emojiImgCache.get(frag.emojiUrl!);
+              if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+                const emojiY = lineY + (lineHeightPx - emojiSize) / 2;
+                ctx.drawImage(cachedImg, bubbleX + bubblePaddingH + xOffset, emojiY, emojiSize, emojiSize);
+              }
+              xOffset += emojiSize + 2;
+            } else {
+              const textX = bubbleX + bubblePaddingH + xOffset;
               ctx.textAlign = 'left';
               ctx.fillText(frag.content, textX, lineY);
               xOffset += measureTextWidth(ctx, frag.content);
@@ -893,7 +1030,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
 
     // Advance y position
     // 行高 = max(头像高度, 用户名高度 + 气泡高度) + 间距
-    const contentHeight = senderNameHeightPx + bubbleHeight;
+    const contentHeight = senderNameHeightPx + effectiveBubbleHeight;
     const currentRowHeight = Math.max(avatarSize, contentHeight) + gap;
     y += currentRowHeight;
   }

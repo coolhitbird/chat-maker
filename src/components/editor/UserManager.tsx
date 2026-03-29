@@ -85,7 +85,7 @@ export default function UserManager() {
   return (
     <div className="space-y-4">
       {/* 说明 */}
-      <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
+      <div className="text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/30 p-2 rounded">
         💡 第一位用户（当事人）的消息显示在右侧，其他人显示在左侧
       </div>
 
@@ -96,7 +96,7 @@ export default function UserManager() {
           value={newUserName}
           onChange={e => setNewUserName(e.target.value)}
           placeholder="输入用户名..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         />
         <button
           type="submit"
@@ -110,14 +110,14 @@ export default function UserManager() {
       {/* 用户列表 */}
       <div className="space-y-2 max-h-60 overflow-y-auto">
         {project.users.map((user, index) => (
-          <div key={user.id} className={`p-2 rounded-lg ${index === 0 ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
+          <div key={user.id} className={`p-2 rounded-lg ${index === 0 ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-gray-50 dark:bg-gray-800'}`}>
             <div className="flex items-center gap-2">
               {/* 排序按钮 */}
               <div className="flex flex-col gap-0.5">
                 <button
                   onClick={() => moveUserUp(index)}
                   disabled={index === 0}
-                  className="w-5 h-4 bg-gray-200 hover:bg-gray-300 rounded text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-5 h-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-xs disabled:opacity-30 disabled:cursor-not-allowed"
                   title="上移"
                 >
                   ▲
@@ -125,7 +125,7 @@ export default function UserManager() {
                 <button
                   onClick={() => moveUserDown(index)}
                   disabled={index === project.users.length - 1}
-                  className="w-5 h-4 bg-gray-200 hover:bg-gray-300 rounded text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-5 h-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-xs disabled:opacity-30 disabled:cursor-not-allowed"
                   title="下移"
                 >
                   ▼
@@ -136,7 +136,7 @@ export default function UserManager() {
                 <img
                   src={user.avatar}
                   alt={user.name}
-                  className="w-10 h-10 rounded-full border-2 border-white shadow"
+                  className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-600 shadow"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`;
                   }}
@@ -157,12 +157,12 @@ export default function UserManager() {
                   onChange={e => setEditingName(e.target.value)}
                   onBlur={() => handleSaveEdit(user.id)}
                   onKeyDown={e => e.key === 'Enter' && handleSaveEdit(user.id)}
-                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   autoFocus
                 />
               ) : (
                 <span
-                  className="flex-1 text-sm cursor-pointer hover:text-blue-600"
+                  className="flex-1 text-sm cursor-pointer hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400"
                   onClick={() => handleStartEdit(user)}
                 >
                   {user.name}
@@ -171,7 +171,7 @@ export default function UserManager() {
                       当事人
                     </span>
                   )}
-                  <span className="ml-1 text-xs text-gray-400">
+                  <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">
                     ({user.role === 'user' ? '右侧' : '左侧'})
                   </span>
                 </span>
@@ -179,7 +179,7 @@ export default function UserManager() {
 
               <button
                 onClick={() => deleteUser(user.id)}
-                className="text-red-400 hover:text-red-600 text-sm"
+                className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-sm"
                 title="删除"
                 disabled={project.users.length <= 1}
               >
@@ -189,7 +189,7 @@ export default function UserManager() {
 
             {/* 头像上传面板 */}
             {uploadingForId === user.id && (
-              <div className="mt-2 p-2 bg-white rounded border">
+              <div className="mt-2 p-2 bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
                 <input
                   type="file"
                   accept="image/*"
@@ -213,7 +213,7 @@ export default function UserManager() {
       </div>
 
       {project.users.length === 0 && (
-        <div className="text-center text-gray-400 text-sm py-4">
+        <div className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">
           暂无用户，请添加
         </div>
       )}

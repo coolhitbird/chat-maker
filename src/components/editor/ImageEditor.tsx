@@ -52,40 +52,16 @@ export default function ImageEditor({ isOpen, onClose }: ImageEditorProps) {
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        padding: 24,
-        width: 400,
-        maxWidth: '90%',
-      }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: 18 }}>插入图片</h3>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-[400px] max-w-[90%]">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">插入图片</h3>
         
-        {/* 发送者选择 */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>发送者</label>
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">发送者</label>
           <select
             value={sender}
             onChange={(e) => setSender(e.target.value)}
-            style={{
-              width: '100%',
-              padding: 8,
-              borderRadius: 6,
-              border: '1px solid #ddd',
-              fontSize: 14,
-            }}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
           >
             {project.users.map(user => (
               <option key={user.id} value={user.name}>{user.name}</option>
@@ -93,115 +69,68 @@ export default function ImageEditor({ isOpen, onClose }: ImageEditorProps) {
           </select>
         </div>
 
-        {/* 图片上传 */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>上传图片</label>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        style={{
-          width: '100%',
-          padding: 8,
-          borderRadius: 6,
-          border: '1px solid #ddd',
-          fontSize: 14,
-        }}
-      />
-      {imageUrl && (
-        <div style={{ marginTop: 8 }}>
-          <img 
-            src={imageUrl} 
-            alt="预览"
-            style={{
-              maxWidth: '100%',
-              maxHeight: 100,
-              borderRadius: 6,
-              border: '1px solid #ddd',
-            }}
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">上传图片</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
           />
-        </div>
-      )}
+          {imageUrl && (
+            <div className="mt-2">
+              <img 
+                src={imageUrl} 
+                alt="预览"
+                className="max-w-full max-h-[100px] rounded-lg border border-gray-300 dark:border-gray-600"
+              />
+            </div>
+          )}
         </div>
 
-        {/* 图片URL */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>或输入图片URL</label>
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">或输入图片URL</label>
           <input
             type="text"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
             placeholder="https://example.com/image.jpg"
-            style={{
-              width: '100%',
-              padding: 8,
-              borderRadius: 6,
-              border: '1px solid #ddd',
-              fontSize: 14,
-            }}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
           />
         </div>
 
-        {/* 图片说明 */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>图片说明（可选）</label>
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">图片说明（可选）</label>
           <input
             type="text"
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             placeholder="例如：这是我的照片"
-            style={{
-              width: '100%',
-              padding: 8,
-              borderRadius: 6,
-              border: '1px solid #ddd',
-              fontSize: 14,
-            }}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
           />
         </div>
 
-        {/* 预览 */}
         {imageUrl && (
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontSize: 14, color: '#666' }}>预览</label>
-            <div style={{
-              width: '100%',
-              height: 150,
-              background: `url(${imageUrl}) center/cover`,
-              borderRadius: 6,
-              border: '1px solid #ddd',
-            }} />
+          <div className="mb-4">
+            <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">预览</label>
+            <div 
+              className="w-full h-[150px] rounded-lg border border-gray-300 dark:border-gray-600 bg-cover bg-center"
+              style={{ backgroundImage: `url(${imageUrl})` }}
+            />
           </div>
         )}
 
-        {/* 操作按钮 */}
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+        <div className="flex gap-3 justify-end">
           <button
             onClick={onClose}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 6,
-              border: '1px solid #ddd',
-              background: '#fff',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-600"
           >
             取消
           </button>
           <button
             onClick={handleSubmit}
             disabled={!imageUrl && !caption}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 6,
-              border: 'none',
-              background: '#07c160',
-              color: '#fff',
-              fontSize: 14,
-              cursor: 'pointer',
-              opacity: (!imageUrl && !caption) ? 0.5 : 1,
-            }}
+            className="px-4 py-2 rounded-lg bg-green-500 text-white text-sm hover:bg-green-600 disabled:opacity-50"
           >
             插入
           </button>
