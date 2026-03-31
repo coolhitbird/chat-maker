@@ -209,10 +209,11 @@ function drawTransfer(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.fillText(isReceived ? '已收款' : '待收款', x + w / 2, y + bodyH + Math.round(16 * scale));
 }
 
-function drawVoice(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, voice: Message['voice'], bubbleColor: string, PAD: number, fontSize: number, lineHeight: number, scale: number = 1) {
-  const iconSize = Math.round(14 * scale);
-  const waveAreaH = Math.round(36 * scale);
+function drawVoice(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, voice: Message['voice'], bubbleColor: string, PAD: number, fontSize: number, lineHeight: number, scale: number = 1, darkMode: boolean = false) {
+  const iconSize = Math.round(16 * scale);
+  const waveAreaH = Math.round(40 * scale);
   const bubbleRadius = Math.round(18 * scale);
+  const durationFontSize = Math.round(12 * scale);
 
   drawBubble(ctx, x, y, w, h, bubbleRadius, bubbleColor);
 
@@ -224,22 +225,26 @@ function drawVoice(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
   ctx.fill();
 
-  const waveX = x + PAD + iconSize + 8;
+  const waveX = x + PAD + iconSize + Math.round(8 * scale);
+  const barWidth = Math.max(1, Math.round(3 * scale));
+  const barGap = Math.max(1, Math.round(3 * scale));
   ctx.fillStyle = bubbleColor === '#95ec69' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.3)';
   for (let i = 0; i < 8; i++) {
-    const barH = (Math.sin(i * 0.8) * 0.5 + 0.5) * 16 + 4;
-    ctx.fillRect(waveX + i * 5, y + (waveAreaH - barH) / 2, 3, barH);
+    const barH = (Math.sin(i * 0.8) * 0.5 + 0.5) * Math.round(16 * scale) + Math.round(4 * scale);
+    ctx.fillRect(waveX + i * (barWidth + barGap), y + (waveAreaH - barH) / 2, barWidth, barH);
   }
 
   ctx.fillStyle = bubbleColor === '#95ec69' ? '#fff' : '#999';
-  ctx.font = '12px "Microsoft YaHei", sans-serif';
+  ctx.font = `${durationFontSize}px "Microsoft YaHei", sans-serif`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${voice?.duration || 0}"`, x + w - PAD - 40, y + waveAreaH / 2);
+  ctx.fillText(`${voice?.duration || 0}"`, x + w - PAD - Math.round(40 * scale), y + waveAreaH / 2);
 
   if (voice?.text) {
-    const textY = y + waveAreaH + 6;
-    ctx.fillStyle = '#333';
+    const textTopPadding = Math.round(6 * scale);
+    const textY = y + waveAreaH + textTopPadding;
+    const textColor = darkMode ? '#fff' : '#333';
+    ctx.fillStyle = textColor;
     ctx.font = `${fontSize}px "Microsoft YaHei", sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
@@ -311,7 +316,7 @@ function drawImage(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   }
 }
 
-function drawSystemMessage(ctx: CanvasRenderingContext2D, _x: number, y: number, w: number, text: string, type: string) {
+function drawSystemMessage(ctx: CanvasRenderingContext2D, _x: number, y: number, w: number, text: string, type: string, scale: number = 1) {
   const styles: Record<string, { bg: string; color: string }> = {
     recall: { bg: '#f5f5f5', color: '#999' },
     pat: { bg: '#fff8e1', color: '#ff9800' },
@@ -319,21 +324,26 @@ function drawSystemMessage(ctx: CanvasRenderingContext2D, _x: number, y: number,
   };
   const s = styles[type] || styles.default;
 
-  ctx.font = '12px "Microsoft YaHei", sans-serif';
+  const systemFontSize = Math.round(12 * scale);
+  const boxPaddingH = Math.round(20 * scale);
+  const boxHeight = Math.round(30 * scale);
+  const boxRadius = Math.round(12 * scale);
+
+  ctx.font = `${systemFontSize}px "Microsoft YaHei", sans-serif`;
   const textW = ctx.measureText(text).width;
-  const boxW = textW + 40;
+  const boxW = textW + boxPaddingH * 2;
   const boxX = (w - boxW) / 2;
 
   ctx.fillStyle = s.bg;
   ctx.beginPath();
-  ctx.roundRect(boxX, y, boxW, 28, 14);
+  ctx.roundRect(boxX, y, boxW, boxHeight, boxRadius);
   ctx.fill();
 
   ctx.fillStyle = s.color;
-  ctx.font = 'italic 12px "Microsoft YaHei", sans-serif';
+  ctx.font = `italic ${systemFontSize}px "Microsoft YaHei", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, w / 2, y + 14);
+  ctx.fillText(text, w / 2, y + boxHeight / 2);
 }
 
 export interface MessageTiming {
@@ -346,6 +356,7 @@ export interface MessageTiming {
 
 function calculateMessageTimings(
   messages: Message[],
+  sequences: Map<string, MessageTypingSequence>,
   config: TypingAnimationConfig,
   messageInterval: number = 1500
 ): { timings: MessageTiming[]; speedMultiplier: number } {
@@ -359,19 +370,30 @@ function calculateMessageTimings(
     const appearTime = currentTime;
 
     if (msg.type === 'system') {
-      const duration = 800 / speedMultiplier;
+      const duration = 800;
       timings.push({
         messageId: msg.id,
         appearTime,
         typingStartTime: appearTime,
-        typingEndTime: appearTime + 200 / speedMultiplier,
+        typingEndTime: appearTime + 200,
         endTime: appearTime + duration,
       });
       currentTime = appearTime + duration;
+    } else if (msg.type === 'voice') {
+      const typingDuration = 100;
+      timings.push({
+        messageId: msg.id,
+        appearTime,
+        typingStartTime: appearTime,
+        typingEndTime: appearTime + typingDuration,
+        endTime: appearTime + typingDuration,
+      });
+      currentTime = appearTime + typingDuration;
     } else {
-      const typingDuration = config.fastMode ? 100 : config.baseSpeed * (msg.content?.length || 10) / speedMultiplier;
+      const sequence = sequences.get(msg.id);
+      const typingDuration = sequence ? sequence.totalDuration : (config.fastMode ? 100 : config.baseSpeed * (msg.content?.length || 10));
       const typingEndTime = appearTime + typingDuration;
-      const endTime = typingEndTime + messageInterval / speedMultiplier;
+      const endTime = typingEndTime + messageInterval;
 
       timings.push({
         messageId: msg.id,
@@ -393,14 +415,20 @@ function getTypingProgressAtTime(
   elapsedTime: number,
   timing: MessageTiming,
   sequences: Map<string, MessageTypingSequence>,
-  fastMode: boolean
+  _fastMode: boolean
 ): { text: string; isTyping: boolean } {
   if (msg.type === 'system') {
     return { text: msg.content || '', isTyping: false };
   }
 
-  if (fastMode || elapsedTime < timing.typingStartTime) {
+  // 消息还未出现
+  if (elapsedTime < timing.typingStartTime) {
     return { text: '', isTyping: false };
+  }
+
+  // 语音消息（不管有没有文字）：直接显示完整内容，不打字动画
+  if (msg.type === 'voice') {
+    return { text: msg.voice?.text || '', isTyping: false };
   }
 
   if (!sequences.has(msg.id)) {
@@ -410,11 +438,9 @@ function getTypingProgressAtTime(
   const sequence = sequences.get(msg.id)!;
   const typingElapsed = elapsedTime - timing.typingStartTime;
   let text = '';
-  let lastEventTime = 0;
 
   for (const event of sequence.events) {
     if (event.timestamp > typingElapsed) break;
-    lastEventTime = Math.max(lastEventTime, event.timestamp);
 
     switch (event.type) {
       case 'char':
@@ -528,19 +554,19 @@ function renderFrame(
       continue;
     }
 
-    drawAvatar(ctx, avatarX, adjustedY, layoutConfig.avatarSize, msg.sender);
-
     if (msg.type === 'system' && msg.system) {
-      drawSystemMessage(ctx, avatarX, adjustedY, width - contentPadding * 2, msg.system?.text || '', msg.system?.type || 'default');
+      drawSystemMessage(ctx, avatarX, adjustedY, width - contentPadding * 2, msg.system?.text || '', msg.system?.type || 'default', scale);
       continue;
     }
+
+    drawAvatar(ctx, avatarX, adjustedY, layoutConfig.avatarSize, msg.sender);
 
     drawSenderName(ctx, senderNameX, adjustedY + senderHeight, msg.sender, isUser ? 'right' : 'left', fontSize);
 
     const bubbleBg = isUser ? styles.bubbleRightBg : styles.bubbleLeftBg;
     const bubbleColor = isUser ? styles.bubbleRightColor : styles.bubbleLeftColor;
     const typingState = typingProgress.get(msg.id);
-    const text = typingState?.text || msg.content || '';
+    const text = typingState?.text ?? '';
 
     const actualBubbleX = isUser ? avatarX - gap - layout.bubbleWidth : avatarX + layoutConfig.avatarSize + gap;
     const actualBubbleY = adjustedY + senderHeight;
@@ -550,10 +576,10 @@ function renderFrame(
     } else if (msg.type === 'transfer') {
       drawTransfer(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, msg.transfer, msg.transfer?.isReceived || false, bubblePadding, scale);
     } else if (msg.type === 'voice') {
-      drawVoice(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, msg.voice, bubbleBg, bubblePadding, fontSize, lineHeight, scale);
+      drawVoice(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, msg.voice, bubbleBg, bubblePadding, fontSize, lineHeight, scale, darkMode);
     } else if (msg.type === 'image') {
       drawImage(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, msg.image, imageCache, scale);
-    } else {
+    } else if (text) {
       drawBubble(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, bubbleRadius, bubbleBg);
       drawTextInBubble(ctx, text, actualBubbleX + bubblePadding, actualBubbleY + bubblePadding, layout.bubbleWidth - bubblePadding * 2, fontSize, bubbleColor, lineHeight, layout.bubbleHeight - bubblePadding * 2);
     }
@@ -606,7 +632,7 @@ export class TypingVideoExporter {
     onProgress?.(5);
 
     const sequences = new Map<string, MessageTypingSequence>();
-    if (config.enabled && !config.fastMode) {
+    if (config.enabled) {
       for (const msg of messages) {
         if (msg.type !== 'system') {
           sequences.set(msg.id, generateTypingSequence(msg, config));
@@ -659,36 +685,39 @@ export class TypingVideoExporter {
       bubbleRadius: Math.round((exportConfig.styles?.bubbleRadius || 18) * scale),
     };
 
-    const { timings, speedMultiplier } = calculateMessageTimings(messages, config, messageInterval);
+    const { timings, speedMultiplier } = calculateMessageTimings(messages, sequences, config, messageInterval);
     let totalDuration = 0;
     for (const t of timings) {
       totalDuration = Math.max(totalDuration, t.endTime);
     }
     totalDuration += 1000;
 
-    const totalFrames = Math.ceil(totalDuration / frameInterval);
+    // 每帧时间步长 = frameInterval * speedMultiplier
+    const timeStep = frameInterval * speedMultiplier;
+    const totalFrames = Math.ceil(totalDuration / timeStep);
     let frameIndex = 0;
 
-    for (let t = 0; t <= totalDuration; t += frameInterval) {
+    for (let t = 0; t <= totalDuration; t += timeStep) {
+      // 当前可见的消息（只显示当前正在打字的消息）
       const visibleMessages: Message[] = [];
       const typingProgress = new Map<string, { text: string; isTyping: boolean }>();
-
+      
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
         const timing = timings[i];
-
-        if (!timing || t < timing.appearTime) {
-          continue;
-        }
-
+        
+        // 只显示当前帧时间之前出现的消息
+        if (t < timing.appearTime) break;
+        
         visibleMessages.push(msg);
-
+        
+        // 计算打字进度
         const elapsedTime = (t - timing.appearTime) * speedMultiplier;
         const progress = getTypingProgressAtTime(msg, elapsedTime, timing, sequences, config.fastMode);
         typingProgress.set(msg.id, progress);
       }
 
-      const { layouts, totalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress);
+      const { layouts, totalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, undefined, scale);
       const scrollOffset = calculateScrollOffset(layouts, totalHeight, layoutConfig, true);
 
       renderFrame(ctx, layoutConfig, layouts, typingProgress, scrollOffset, darkMode, imageCache, scale, 'Chat');

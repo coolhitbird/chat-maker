@@ -89,57 +89,60 @@ export function calculateMessageHeight(
   msg: Message,
   config: LayoutConfig,
   visibleContent?: string,
-  _typingState?: { isTyping: boolean; isCurrentTyping: boolean }
+  _typingState?: { isTyping: boolean },
+  scale: number = 1
 ): { rowHeight: number; bubbleWidth: number; bubbleHeight: number } {
   const { avatarSize, fontSize, bubblePadding, maxBubbleWidthRatio } = config;
   const senderHeight = Math.round(avatarSize * 0.33);
   const maxBubbleWidth = config.width * maxBubbleWidthRatio;
   
   let rowHeight = avatarSize;
-  let bubbleWidth = 60;
-  let bubbleHeight = 40;
+  let bubbleWidth = Math.round(60 * scale);
+  let bubbleHeight = Math.round(40 * scale);
   
+  // 使用当前可见内容计算布局
   const content = visibleContent || msg.content || '';
   
   switch (msg.type) {
     case 'system':
-      return { rowHeight: 28, bubbleWidth: 0, bubbleHeight: 0 };
+      return { rowHeight: Math.round(28 * scale), bubbleWidth: 0, bubbleHeight: 0 };
       
     case 'redpacket':
-      bubbleWidth = 180;
-      bubbleHeight = 102;
+      bubbleWidth = Math.round(180 * scale);
+      bubbleHeight = Math.round(102 * scale);
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
       
     case 'transfer':
-      bubbleWidth = 180;
-      bubbleHeight = 120;
+      bubbleWidth = Math.round(180 * scale);
+      bubbleHeight = Math.round(120 * scale);
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
       
     case 'image':
-      bubbleWidth = 180;
-      bubbleHeight = 180;
+      bubbleWidth = Math.round(180 * scale);
+      bubbleHeight = Math.round(180 * scale);
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
       
     case 'voice':
-      bubbleWidth = Math.max(120, 60 + (msg.voice?.duration || 5) * 10);
+      bubbleWidth = Math.max(Math.round(120 * scale), Math.round(60 * scale + (msg.voice?.duration || 5) * 10 * scale));
       if (msg.voice?.text) {
         const textLayout = calculateTextLayout(ctx, msg.voice.text, maxBubbleWidth, fontSize, bubblePadding);
-        bubbleHeight = 36 + textLayout.height + 12;
+        bubbleHeight = Math.round(36 * scale) + textLayout.height + Math.round(12 * scale);
       } else {
-        bubbleHeight = 36;
+        bubbleHeight = Math.round(36 * scale);
       }
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
       
-    default:
+    default: {
       const textLayout = calculateTextLayout(ctx, content, maxBubbleWidth, fontSize, bubblePadding);
       bubbleWidth = Math.min(textLayout.width, maxBubbleWidth);
-      bubbleHeight = textLayout.height;
+      bubbleHeight = Math.max(textLayout.height, Math.round(40 * scale));
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
+    }
   }
 }
 
@@ -148,7 +151,8 @@ export function calculateAllLayouts(
   messages: Message[],
   config: LayoutConfig,
   messageTypingProgress?: Map<string, { text: string; isTyping: boolean }>,
-  currentTypingIndex?: number
+  currentTypingIndex?: number,
+  scale: number = 1
 ): { layouts: MessageLayout[]; totalHeight: number } {
   const { width, headerHeight, statusBarHeight, avatarSize, gap, contentPadding } = config;
   const senderHeight = Math.round(avatarSize * 0.33);
@@ -164,10 +168,10 @@ export function calculateAllLayouts(
     const avatarX = isUser ? width - contentPadding - avatarSize : contentPadding;
     
     const typingState = messageTypingProgress?.get(msg.id);
-    const visibleContent = typingState?.text || msg.content || '';
+    const visibleContent = typingState?.text ?? msg.content ?? '';
     
     const { rowHeight, bubbleWidth, bubbleHeight } = calculateMessageHeight(
-      ctx, msg, config, visibleContent
+      ctx, msg, config, visibleContent, typingState, scale
     );
     
     const actualBubbleX = isUser 

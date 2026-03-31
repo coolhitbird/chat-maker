@@ -225,9 +225,10 @@ function drawImageMessage(ctx: CanvasRenderingContext2D, x: number, y: number, w
 }
 
 function drawVoiceMessage(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, voice: Message['voice'], bubbleColor: string, PAD: number, fontSize: number, lineHeight: number, darkMode: boolean, scale: number = 1) {
-  const iconSize = Math.round(14 * scale);
-  const waveAreaH = Math.round(36 * scale);
+  const iconSize = Math.round(16 * scale);
+  const waveAreaH = Math.round(40 * scale);
   const bubbleRadius = Math.round(18 * scale);
+  const durationFontSize = Math.round(12 * scale);
 
   drawBubble(ctx, x, y, w, h, bubbleRadius, bubbleColor);
 
@@ -239,22 +240,26 @@ function drawVoiceMessage(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.closePath();
   ctx.fill();
 
-  const waveX = x + PAD + iconSize + 8;
+  const waveX = x + PAD + iconSize + Math.round(8 * scale);
+  const barWidth = Math.max(1, Math.round(3 * scale));
+  const barGap = Math.max(1, Math.round(3 * scale));
   ctx.fillStyle = bubbleColor === '#95ec69' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.3)';
   for (let i = 0; i < 8; i++) {
-    const barH = (Math.sin(i * 0.8) * 0.5 + 0.5) * 16 + 4;
-    ctx.fillRect(waveX + i * 5, y + (waveAreaH - barH) / 2, 3, barH);
+    const barH = (Math.sin(i * 0.8) * 0.5 + 0.5) * Math.round(16 * scale) + Math.round(4 * scale);
+    ctx.fillRect(waveX + i * (barWidth + barGap), y + (waveAreaH - barH) / 2, barWidth, barH);
   }
 
   ctx.fillStyle = bubbleColor === '#95ec69' ? '#fff' : '#999';
-  ctx.font = '12px "Microsoft YaHei", sans-serif';
+  ctx.font = `${durationFontSize}px "Microsoft YaHei", sans-serif`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${voice?.duration || 0}"`, x + w - PAD - 40, y + waveAreaH / 2);
+  ctx.fillText(`${voice?.duration || 0}"`, x + w - PAD - Math.round(40 * scale), y + waveAreaH / 2);
 
   if (voice?.text) {
-    const textY = y + waveAreaH + 6;
-    ctx.fillStyle = darkMode ? '#fff' : '#333';
+    const textTopPadding = Math.round(6 * scale);
+    const textY = y + waveAreaH + textTopPadding;
+    const textColor = darkMode ? '#fff' : '#333';
+    ctx.fillStyle = textColor;
     ctx.font = `${fontSize}px "Microsoft YaHei", sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
@@ -344,17 +349,38 @@ function renderLayouts(
 
     if (msg.type === 'system') {
       const systemText = msg.system?.text || msg.content || '';
-      ctx.font = `${fontSize * 0.9}px "Microsoft YaHei", "PingFang SC", sans-serif`;
-      const textWidth = ctx.measureText(systemText).width + 30;
+      const systemType = msg.system?.type || 'default';
+      
+      const systemStyles: Record<string, { bg: string; color: string; icon: string }> = {
+        recall: { bg: '#f5f5f5', color: '#999', icon: '↩️' },
+        pat: { bg: '#fff8e1', color: '#ff9800', icon: '🤚' },
+        addFriend: { bg: '#e3f2fd', color: '#1976d2', icon: '👤' },
+        invite: { bg: '#e8f5e9', color: '#388e3c', icon: '👥' },
+        warning: { bg: '#fff3cd', color: '#856404', icon: '⚠️' },
+        notification: { bg: '#fff3e0', color: '#e65100', icon: '📢' },
+        default: { bg: '#f0f0f0', color: '#666', icon: 'ℹ️' }
+      };
+      const s = systemStyles[systemType] || systemStyles.default;
+      
+      const systemFontSize = Math.round(fontSize * 0.9);
+      const boxPaddingH = Math.round(20 * scale);
+      const boxHeight = Math.round(30 * scale);
+      const boxRadius = Math.round(12 * scale);
+      
+      ctx.font = `${systemFontSize}px "Microsoft YaHei", sans-serif`;
+      const textW = ctx.measureText(`${s.icon} ${systemText}`).width;
+      const boxW = textW + boxPaddingH * 2;
+      const boxX = (width - boxW) / 2;
 
-      ctx.fillStyle = darkMode ? '#333' : '#f0f0f0';
+      ctx.fillStyle = darkMode ? '#333' : s.bg;
       ctx.beginPath();
-      ctx.roundRect((width - textWidth) / 2, adjustedY, textWidth, 24, 12);
+      ctx.roundRect(boxX, adjustedY, boxW, boxHeight, boxRadius);
       ctx.fill();
 
-      ctx.fillStyle = darkMode ? '#888' : '#888';
+      ctx.fillStyle = darkMode ? '#888' : s.color;
       ctx.textAlign = 'center';
-      ctx.fillText(systemText, width / 2, adjustedY + 12);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${s.icon} ${systemText}`, width / 2, adjustedY + boxHeight / 2);
       ctx.textAlign = 'left';
       continue;
     }
@@ -628,7 +654,7 @@ export class ContentTypingRenderer {
         }
       }
 
-      const { layouts, totalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, currentTypingIndex);
+      const { layouts, totalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, currentTypingIndex, scale);
       const scrollOffset = calculateScrollOffset(layouts, totalHeight, layoutConfig, true);
 
       renderLayouts(ctx, layouts, typingProgress, scrollOffset, layoutConfig, darkMode, imageCache, config.cursorEnabled, config.cursorBlinkRate, t, scale);
