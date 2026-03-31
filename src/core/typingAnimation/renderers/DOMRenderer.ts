@@ -97,7 +97,8 @@ export class DOMTypingRenderer implements TypingRenderer {
     content: string,
     isUser: boolean,
     darkMode: boolean,
-    styles: any
+    styles: any,
+    scale: number = 1
   ): string {
     const bg = isUser
       ? (darkMode ? '#128400' : styles.bubbleRightBg || '#95ec69')
@@ -106,15 +107,19 @@ export class DOMTypingRenderer implements TypingRenderer {
       ? '#ffffff'
       : (darkMode ? '#ffffff' : styles.bubbleLeftColor || '#333');
     const text = this.escapeHtml(content);
+    const paddingH = Math.round(12 * scale);
+    const paddingV = Math.round(10 * scale);
+    const borderRadius = Math.round(18 * scale);
+    const fontSize = Math.round((styles.fontSize || 16) * scale);
 
     return `
       <div style="
         background: ${bg};
         color: ${color};
-        padding: 10px 14px;
-        border-radius: 12px;
-        font-size: ${styles.fontSize || 16}px;
-        line-height: 1.5;
+        padding: ${paddingV}px ${paddingH}px;
+        border-radius: ${borderRadius}px;
+        font-size: ${fontSize}px;
+        line-height: 1.4;
         max-width: 100%;
         word-break: break-word;
         display: inline-block;
@@ -122,51 +127,60 @@ export class DOMTypingRenderer implements TypingRenderer {
     `;
   }
 
-  private createRedPacketHtml(msg: Message, _isUser: boolean): string {
+  private createRedPacketHtml(msg: Message, _isUser: boolean, scale: number = 1): string {
     const amount = ((msg.redPacket?.amount || 0) / 100).toFixed(2);
     const greeting = this.escapeHtml(msg.redPacket?.greeting || '恭喜发财，大吉大利');
     const isOpened = msg.redPacket?.isOpened || false;
 
+    const w = Math.round(180 * scale);
+    const iconSize = Math.round(48 * scale);
+    const iconFontSize = Math.round(24 * scale);
+    const gap = Math.round(12 * scale);
+    const headerPadding = Math.round(12 * scale);
+    const footerPadding = Math.round(8 * scale);
+    const titleFontSize = Math.round(16 * scale);
+    const greetingFontSize = Math.round(14 * scale);
+    const footerFontSize = Math.round(12 * scale);
+
     return `
       <div style="
         background: #fff;
-        border-radius: 10px;
-        width: 200px;
+        border-radius: ${Math.round(10 * scale)}px;
+        width: ${w}px;
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         font-family: 'Microsoft YaHei', sans-serif;
       ">
         <div style="
           background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-          padding: 12px;
+          padding: ${headerPadding}px;
         ">
           <div style="display: flex; align-items: center;">
             <div style="
-              width: 48px;
-              height: 48px;
+              width: ${iconSize}px;
+              height: ${iconSize}px;
               background: #ffd700;
               border-radius: 50%;
               display: flex;
               align-items: center;
               justify-content: center;
-              margin-right: 12px;
-            ">
-              <span style="font-size: 24px;">🧧</span>
-            </div>
+              margin-right: ${gap}px;
+              font-size: ${iconFontSize}px;
+            ">🧧</div>
             <div style="color: white;">
-              <div style="font-weight: bold; font-size: 16px;">微信红包</div>
-              <div style="font-size: 14px; opacity: 0.9; margin-top: 2px;">${greeting}</div>
+              <div style="font-weight: bold; font-size: ${titleFontSize}px;">微信红包</div>
+              <div style="font-size: ${greetingFontSize}px; opacity: 0.9; margin-top: 2px;">${greeting}</div>
             </div>
           </div>
         </div>
         <div style="
           background: #f8f8f8;
-          padding: 8px 12px;
+          padding: ${footerPadding}px ${headerPadding}px;
           text-align: center;
           border-top: 1px solid #eee;
         ">
           <div style="
-            font-size: 12px;
+            font-size: ${footerFontSize}px;
             color: ${isOpened ? '#e74c3c' : '#666'};
           ">${isOpened ? `已领取 ¥${amount}` : '领取红包'}</div>
         </div>
@@ -174,15 +188,25 @@ export class DOMTypingRenderer implements TypingRenderer {
     `;
   }
 
-  private createTransferHtml(msg: Message, _isUser: boolean): string {
+  private createTransferHtml(msg: Message, _isUser: boolean, scale: number = 1): string {
     const amount = ((msg.transfer?.amount || 0) / 100).toFixed(2);
     const isReceived = msg.transfer?.isReceived || false;
+
+    const w = Math.round(180 * scale);
+    const iconSize = Math.round(44 * scale);
+    const iconFontSize = Math.round(20 * scale);
+    const gap = Math.round(12 * scale);
+    const headerPadding = Math.round(12 * scale);
+    const footerPadding = Math.round(8 * scale);
+    const titleFontSize = Math.round(14 * scale);
+    const amountFontSize = Math.round(20 * scale);
+    const footerFontSize = Math.round(12 * scale);
 
     return `
       <div style="
         background: #fff;
-        border-radius: 10px;
-        width: 200px;
+        border-radius: ${Math.round(10 * scale)}px;
+        width: ${w}px;
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         font-family: 'Microsoft YaHei', sans-serif;
@@ -190,35 +214,35 @@ export class DOMTypingRenderer implements TypingRenderer {
       ">
         <div style="
           background: #f5f5f5;
-          padding: 12px;
+          padding: ${headerPadding}px;
         ">
           <div style="display: flex; align-items: center;">
             <div style="
-              width: 44px;
-              height: 44px;
+              width: ${iconSize}px;
+              height: ${iconSize}px;
               background: #07c160;
               border-radius: 50%;
               display: flex;
               align-items: center;
               justify-content: center;
-              margin-right: 12px;
+              margin-right: ${gap}px;
             ">
-              <span style="color: white; font-size: 20px; font-weight: bold;">¥</span>
+              <span style="color: white; font-size: ${iconFontSize}px; font-weight: bold;">¥</span>
             </div>
             <div style="color: #333;">
-              <div style="font-weight: 500; font-size: 14px;">转账</div>
-              <div style="font-weight: bold; font-size: 20px; margin-top: 2px;">¥${amount}</div>
+              <div style="font-weight: 500; font-size: ${titleFontSize}px;">转账</div>
+              <div style="font-weight: bold; font-size: ${amountFontSize}px; margin-top: 2px;">¥${amount}</div>
             </div>
           </div>
         </div>
         <div style="
           background: #f8f8f8;
-          padding: 8px 12px;
+          padding: ${footerPadding}px ${headerPadding}px;
           text-align: center;
           border-top: 1px solid #e0e0e0;
         ">
           <div style="
-            font-size: 12px;
+            font-size: ${footerFontSize}px;
             color: ${isReceived ? '#07c160' : '#999'};
           ">${isReceived ? '已收款' : '待收款'}</div>
         </div>
@@ -226,23 +250,28 @@ export class DOMTypingRenderer implements TypingRenderer {
     `;
   }
 
-  private createImageHtml(msg: Message, imageCache: Map<string, HTMLImageElement>): string {
+  private createImageHtml(msg: Message, imageCache: Map<string, HTMLImageElement>, scale: number = 1): string {
     const caption = this.escapeHtml(msg.image?.caption || '');
     const imageUrl = msg.image?.url || '';
+    const size = Math.round(180 * scale);
+    const borderRadius = Math.round(12 * scale);
+    const captionFontSize = Math.round(12 * scale);
+    const captionPadding = Math.round(4 * scale);
+    const placeholderSize = Math.round(48 * scale);
 
     if (imageUrl && imageCache.has(imageUrl)) {
       return `
         <div style="
-          border-radius: 12px;
+          border-radius: ${borderRadius}px;
           overflow: hidden;
           position: relative;
-          max-width: 180px;
+          max-width: ${size}px;
         ">
           <img 
             src="${imageUrl}" 
             style="
-              width: 180px;
-              height: 180px;
+              width: ${size}px;
+              height: ${size}px;
               object-fit: cover;
               display: block;
             "
@@ -255,8 +284,8 @@ export class DOMTypingRenderer implements TypingRenderer {
               right: 0;
               background: rgba(0,0,0,0.6);
               color: white;
-              padding: 4px 8px;
-              font-size: 12px;
+              padding: ${captionPadding}px ${Math.round(8 * scale)}px;
+              font-size: ${captionFontSize}px;
               text-align: center;
             ">${caption}</div>
           ` : ''}
@@ -267,37 +296,49 @@ export class DOMTypingRenderer implements TypingRenderer {
     return `
       <div style="
         background: #e0e0e0;
-        border-radius: 12px;
-        width: 180px;
-        height: 180px;
+        border-radius: ${borderRadius}px;
+        width: ${size}px;
+        height: ${size}px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 48px;
+        font-size: ${placeholderSize}px;
         position: relative;
       ">📷</div>
     `;
   }
 
-  private createVoiceHtml(msg: Message, isUser: boolean, darkMode: boolean, styles: any): string {
+  private createVoiceHtml(msg: Message, isUser: boolean, darkMode: boolean, styles: any, scale: number = 1): string {
     const bg = isUser
       ? (darkMode ? '#128400' : styles.bubbleRightBg || '#95ec69')
       : (darkMode ? '#2d2d2d' : styles.bubbleLeftBg || '#ffffff');
     const color = isUser ? '#ffffff' : '#333';
     const duration = msg.voice?.duration || 0;
     const text = this.escapeHtml(msg.voice?.text || '');
-    const bubbleWidth = Math.max(120, 60 + duration * 8);
+    const bubbleWidth = Math.max(Math.round(120 * scale), Math.round(60 * scale + duration * 8 * scale));
+    const paddingH = Math.round(12 * scale);
+    const paddingV = Math.round(8 * scale);
+    const borderRadius = Math.round(18 * scale);
+    const arrowSize = Math.round(6 * scale);
+    const arrowBorder = Math.round(8 * scale);
+    const waveGap = Math.round(3 * scale);
+    const waveBarWidth = Math.round(3 * scale);
+    const durationFontSize = Math.round(12 * scale);
+    const textFontSize = Math.round(14 * scale);
 
     const waveBars = [0,1,2,3,4,5,6,7].map(i => {
-      const h = 8 + Math.sin(i * 0.8) * 6;
-      return `<div style="width:3px;height:${h}px;background:${color};opacity:0.6;border-radius:1px;"></div>`;
+      const h = Math.round((8 + Math.sin(i * 0.8) * 6) * scale);
+      return `<div style="width:${waveBarWidth}px;height:${h}px;background:${color};opacity:0.6;border-radius:1px;"></div>`;
     }).join('');
+
+    const arrowBorderLeft = isUser ? `border-left: ${arrowBorder}px solid ${color};` : '';
+    const arrowBorderRight = isUser ? '' : `border-right: ${arrowBorder}px solid ${color};`;
 
     return `
       <div style="
         background: ${bg};
-        border-radius: 12px;
-        padding: 8px 12px;
+        border-radius: ${borderRadius}px;
+        padding: ${paddingV}px ${paddingH}px;
         display: flex;
         align-items: center;
         min-width: ${bubbleWidth}px;
@@ -306,15 +347,15 @@ export class DOMTypingRenderer implements TypingRenderer {
         <div style="
           width: 0;
           height: 0;
-          border-top: 6px solid transparent;
-          border-bottom: 6px solid transparent;
-          ${isUser ? `border-left` : `border-right`}: 8px solid ${color};
-          margin-right: 8px;
+          border-top: ${arrowSize}px solid transparent;
+          border-bottom: ${arrowSize}px solid transparent;
+          ${arrowBorderLeft}${arrowBorderRight}
+          margin-right: ${Math.round(8 * scale)}px;
         "></div>
-        <div style="display:flex;align-items:center;gap:3px;">${waveBars}</div>
-        <span style="margin-left:8px;font-size:12px;opacity:0.7;color:${color};">${duration}"</span>
+        <div style="display:flex;align-items:center;gap:${waveGap}px;">${waveBars}</div>
+        <span style="margin-left:${Math.round(8 * scale)}px;font-size:${durationFontSize}px;opacity:0.7;color:${color};">${duration}"</span>
       </div>
-      ${text ? `<div style="margin-top:4px;font-size:14px;color:${darkMode ? '#aaa' : '#666'};padding-left:4px;">${text}</div>` : ''}
+      ${text ? `<div style="margin-top:${Math.round(4 * scale)}px;font-size:${textFontSize}px;color:${darkMode ? '#aaa' : '#666'};padding-left:${Math.round(4 * scale)}px;">${text}</div>` : ''}
     `;
   }
 
@@ -323,24 +364,28 @@ export class DOMTypingRenderer implements TypingRenderer {
     isUser: boolean,
     darkMode: boolean,
     styles: any,
-    imageCache: Map<string, HTMLImageElement>
+    imageCache: Map<string, HTMLImageElement>,
+    scale: number = 1
   ): string {
-    const avatarSize = styles.avatarSize || 40;
-    const gap = 8;
+    const avatarSize = Math.round((styles.avatarSize || 40) * scale);
+    const gap = Math.round(8 * scale);
+    const padding = Math.round(10 * scale);
+    const senderFontSize = Math.round(12 * scale);
+    const senderMarginBottom = Math.round(4 * scale);
 
     if (msg.type === 'system') {
       const systemText = this.escapeHtml(msg.system?.text || msg.content || '');
       return `
         <div style="
           text-align: center;
-          margin: 8px 0;
+          margin: ${gap}px 0;
         ">
           <span style="
             background: ${darkMode ? '#333' : '#f0f0f0'};
             color: ${darkMode ? '#888' : '#888'};
-            font-size: 12px;
-            padding: 4px 12px;
-            border-radius: 10px;
+            font-size: ${Math.round(12 * scale)}px;
+            padding: ${Math.round(4 * scale)}px ${Math.round(12 * scale)}px;
+            border-radius: ${Math.round(10 * scale)}px;
             display: inline-block;
           ">${systemText}</span>
         </div>
@@ -350,36 +395,41 @@ export class DOMTypingRenderer implements TypingRenderer {
     let contentHtml = '';
 
     if (msg.type === 'redpacket') {
-      contentHtml = this.createRedPacketHtml(msg, isUser);
+      contentHtml = this.createRedPacketHtml(msg, isUser, scale);
     } else if (msg.type === 'transfer') {
-      contentHtml = this.createTransferHtml(msg, isUser);
+      contentHtml = this.createTransferHtml(msg, isUser, scale);
     } else if (msg.type === 'image') {
-      contentHtml = this.createImageHtml(msg, imageCache);
+      contentHtml = this.createImageHtml(msg, imageCache, scale);
     } else if (msg.type === 'voice') {
-      contentHtml = this.createVoiceHtml(msg, isUser, darkMode, styles);
+      contentHtml = this.createVoiceHtml(msg, isUser, darkMode, styles, scale);
     } else {
-      contentHtml = this.createTextBubbleHtml(msg.content || '', isUser, darkMode, styles);
+      contentHtml = this.createTextBubbleHtml(msg.content || '', isUser, darkMode, styles, scale);
     }
+
+    const flexDirection = isUser ? 'row-reverse' : 'row';
+    const avatarMarginLeft = isUser ? gap : 0;
+    const avatarMarginRight = isUser ? 0 : gap;
+    const senderTextAlign = isUser ? 'right' : 'left';
 
     return `
       <div style="
         display: flex;
-        flex-direction: ${isUser ? 'row-reverse' : 'row'};
+        flex-direction: ${flexDirection};
         align-items: flex-start;
         margin-bottom: ${gap}px;
-        padding: 0 4px;
+        padding: 0 ${padding}px;
       ">
         ${this.createAvatarHtml(msg.sender, avatarSize)}
         <div style="
-          margin-left: ${isUser ? 0 : gap}px;
-          margin-right: ${isUser ? gap : 0}px;
-          max-width: 70%;
+          margin-left: ${avatarMarginLeft}px;
+          margin-right: ${avatarMarginRight}px;
+          max-width: 65%;
         ">
           <div style="
-            font-size: 12px;
+            font-size: ${senderFontSize}px;
             color: #888;
-            margin-bottom: 4px;
-            ${isUser ? 'text-align: right;' : ''}
+            margin-bottom: ${senderMarginBottom}px;
+            text-align: ${senderTextAlign};
           ">${msg.sender}</div>
           ${contentHtml}
         </div>
@@ -391,15 +441,19 @@ export class DOMTypingRenderer implements TypingRenderer {
     messages: Message[],
     darkMode: boolean,
     styles: any,
-    imageCache: Map<string, HTMLImageElement>
+    imageCache: Map<string, HTMLImageElement>,
+    scrollOffset: number = 0
   ) {
     if (!this.container) return;
 
-    const avatarSize = styles.avatarSize || 40;
-    const fontSize = styles.fontSize || 16;
+    const avatarSize = Math.round((styles.avatarSize || 40));
+    const fontSize = Math.round(styles.fontSize || 16);
     const headerHeight = avatarSize + 8;
+    const statusBarHeight = styles.statusBarHeight || 0;
+    const contentPadding = 10;
     const width = styles.width;
     const height = styles.height;
+    const scale = width / 375;
 
     const headerBg = darkMode ? '#2d2d2d' : (styles.headerBg || '#f5f5f5');
     const headerColor = darkMode ? '#ffffff' : (styles.headerColor || '#1a1a1a');
@@ -408,8 +462,10 @@ export class DOMTypingRenderer implements TypingRenderer {
     let messagesHtml = '';
     for (const msg of messages) {
       const isUser = msg.role === 'user';
-      messagesHtml += this.createMessageHtml(msg, isUser, darkMode, styles, imageCache);
+      messagesHtml += this.createMessageHtml(msg, isUser, darkMode, styles, imageCache, scale);
     }
+
+    const totalHeaderHeight = headerHeight + statusBarHeight;
 
     this.container.innerHTML = `
       <div style="
@@ -420,6 +476,20 @@ export class DOMTypingRenderer implements TypingRenderer {
         overflow: hidden;
         position: relative;
       ">
+        <div style="
+          height: ${statusBarHeight}px;
+          background: ${headerBg};
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 ${Math.round(8 * scale)}px;
+          color: #888;
+          font-size: ${Math.round(10 * scale)}px;
+          flex-shrink: 0;
+        ">
+          <span>10:30</span>
+          <span>📶 📡 🔋</span>
+        </div>
         <div style="
           height: ${headerHeight}px;
           background: ${headerBg};
@@ -434,15 +504,21 @@ export class DOMTypingRenderer implements TypingRenderer {
           Chat
         </div>
         <div style="
-          padding: 10px;
           position: absolute;
-          top: ${headerHeight}px;
+          top: ${totalHeaderHeight}px;
           left: 0;
           right: 0;
           bottom: 0;
-          overflow-y: auto;
+          overflow: hidden;
         ">
-          ${messagesHtml}
+          <div style="
+            padding: ${contentPadding}px;
+            height: 100%;
+            overflow-y: auto;
+            transform: translateY(-${scrollOffset}px);
+          ">
+            ${messagesHtml}
+          </div>
         </div>
       </div>
     `;
@@ -541,7 +617,24 @@ export class DOMTypingRenderer implements TypingRenderer {
         }
       }
 
-      this.updateDOMContent(visibleMessages, darkMode, styles, this.imageCache);
+      const scale = width / 375;
+      const avatarSize = (styles.avatarSize || 40) * scale;
+      const headerHeight = avatarSize + 8;
+      const statusBarHeight = (styles as any).statusBarHeight || 0;
+      const contentPadding = 10;
+      const totalHeaderHeight = headerHeight + statusBarHeight;
+      const visibleContentHeight = height - totalHeaderHeight - contentPadding * 2;
+      
+      const estimatedRowHeight = avatarSize + 20;
+      const maxVisibleRows = Math.floor(visibleContentHeight / estimatedRowHeight);
+      
+      let scrollOffset = 0;
+      if (visibleMessages.length > maxVisibleRows) {
+        const extraMessages = visibleMessages.length - maxVisibleRows;
+        scrollOffset = extraMessages * estimatedRowHeight;
+      }
+
+      this.updateDOMContent(visibleMessages, darkMode, styles, this.imageCache, scrollOffset);
 
       try {
         const htmlCanvas = await html2canvas(this.container.firstElementChild as HTMLElement, {
