@@ -634,14 +634,7 @@ export class DOMTypingRenderer implements TypingRenderer {
 
       this.updateDOMContent(visibleMessages, darkMode, styles, this.imageCache, scrollTop);
 
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      const messagesContainer = this.container?.querySelector('#messages-container') as HTMLElement;
-      if (messagesContainer && scrollTop > 0) {
-        messagesContainer.scrollTop = scrollTop;
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       try {
         const htmlCanvas = await html2canvas(this.container.firstElementChild as HTMLElement, {
@@ -650,6 +643,12 @@ export class DOMTypingRenderer implements TypingRenderer {
           logging: false,
           useCORS: true,
           allowTaint: false,
+          onclone: (_clonedDoc: Document, clonedElem: HTMLElement) => {
+            const container = clonedElem.querySelector('#messages-container') as HTMLElement;
+            if (container && scrollTop > 0) {
+              container.scrollTop = scrollTop;
+            }
+          }
         });
 
         ctx.drawImage(htmlCanvas, 0, 0, width, height);
