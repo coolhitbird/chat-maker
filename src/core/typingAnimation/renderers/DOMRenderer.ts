@@ -442,14 +442,14 @@ export class DOMTypingRenderer implements TypingRenderer {
     darkMode: boolean,
     styles: any,
     imageCache: Map<string, HTMLImageElement>,
-    scrollOffset: number = 0
+    scrollTop: number = 0
   ) {
     if (!this.container) return;
 
     const avatarSize = Math.round((styles.avatarSize || 40));
     const fontSize = Math.round(styles.fontSize || 16);
     const headerHeight = avatarSize + 8;
-    const statusBarHeight = styles.statusBarHeight || 0;
+    const statusBarHeight = (styles as any).statusBarHeight || 0;
     const contentPadding = 10;
     const width = styles.width;
     const height = styles.height;
@@ -503,19 +503,17 @@ export class DOMTypingRenderer implements TypingRenderer {
         ">
           Chat
         </div>
-        <div style="
+        <div id="messages-container" style="
           position: absolute;
           top: ${totalHeaderHeight}px;
           left: 0;
           right: 0;
           bottom: 0;
-          overflow: hidden;
+          overflow-y: auto;
+          padding: ${contentPadding}px;
         ">
-          <div style="
-            padding: ${contentPadding}px;
-            height: 100%;
-            overflow-y: auto;
-            transform: translateY(-${scrollOffset}px);
+          <div id="messages-wrapper" style="
+            padding-top: ${scrollTop}px;
           ">
             ${messagesHtml}
           </div>
@@ -628,13 +626,22 @@ export class DOMTypingRenderer implements TypingRenderer {
       const estimatedRowHeight = avatarSize + 20;
       const maxVisibleRows = Math.floor(visibleContentHeight / estimatedRowHeight);
       
-      let scrollOffset = 0;
+      let scrollTop = 0;
       if (visibleMessages.length > maxVisibleRows) {
         const extraMessages = visibleMessages.length - maxVisibleRows;
-        scrollOffset = extraMessages * estimatedRowHeight;
+        scrollTop = extraMessages * estimatedRowHeight;
       }
 
-      this.updateDOMContent(visibleMessages, darkMode, styles, this.imageCache, scrollOffset);
+      this.updateDOMContent(visibleMessages, darkMode, styles, this.imageCache, scrollTop);
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      const messagesContainer = this.container?.querySelector('#messages-container') as HTMLElement;
+      if (messagesContainer && scrollTop > 0) {
+        messagesContainer.scrollTop = scrollTop;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       try {
         const htmlCanvas = await html2canvas(this.container.firstElementChild as HTMLElement, {
