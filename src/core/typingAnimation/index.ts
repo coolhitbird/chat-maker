@@ -8,3 +8,5 @@ export { TypingSettingsModal } from './components';
 export { LoopTypingRenderer, loopTypingRenderer } from './renderers/LoopRenderer';
 export { ContentTypingRenderer, contentTypingRenderer } from './renderers/ContentRenderer';
 export { DOMTypingRenderer, domTypingRenderer } from './renderers/DOMRenderer';
+
+export { generateDebugHtml, openDebugPreview, downloadDebugHtml } from './debugPreview';

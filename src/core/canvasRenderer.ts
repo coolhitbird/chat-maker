@@ -1,15 +1,6 @@
 import type { Message, ThemeStyles, UserProfile } from '@/types';
-import type { MessageStyleConfig } from '@/components/messages/wechat/types';
 import { defaultLayoutConfig } from './messageLayout';
 import { wechatEmojis } from '@/utils/emoji';
-import { wechatRedPacketStyle } from '@/components/messages';
-
-// 获取当前平台的样式（未来可通过参数动态切换）
-function getRedPacketStyle(_platform: string): MessageStyleConfig {
-  // 未来这里可以扩展更多平台
-  // 现在只支持微信
-  return wechatRedPacketStyle;
-}
 
 const AVATAR_COLORS = [
   '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
@@ -305,7 +296,7 @@ function getGlobalEmojiCache(): Map<string, HTMLImageElement> {
 }
 
 export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOptions): void {
-  const { width, height, styles, title, messages, users, emojiCache, imageCache, darkMode = false } = options;
+  const { width, height, styles, title, messages, users, emojiCache, imageCache, darkMode = false, scale: customScale } = options;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -317,16 +308,21 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   users.forEach(u => userAvatarMap.set(u.name, u.avatar));
 
   const isMobile = width < height;
-  const headerHeight = styles.avatarSize + 8;
-  const statusBarHeight = isMobile ? 24 : 0;
-  const avatarSize = styles.avatarSize;
-  const gap = styles.messageGap;
-  const bubblePaddingH = styles.bubblePadding + 2;
-  const bubblePaddingV = styles.bubblePadding;
-  const bubbleRadius = styles.bubbleRadius;
-  const fontSize = styles.fontSize;
+  
+  // Calculate scale factor if not provided
+  const BASE_WIDTH = 375;
+  const scale = customScale ?? (width / BASE_WIDTH);
+  
+  const headerHeight = Math.round(styles.avatarSize * scale) + Math.round(8 * scale);
+  const statusBarHeight = isMobile ? Math.round(24 * scale) : 0;
+  const avatarSize = Math.round(styles.avatarSize * scale);
+  const gap = Math.round(styles.messageGap * scale);
+  const bubblePaddingH = Math.round((styles.bubblePadding + 2) * scale);
+  const bubblePaddingV = Math.round(styles.bubblePadding * scale);
+  const bubbleRadius = Math.round(styles.bubbleRadius * scale);
+  const fontSize = Math.round(styles.fontSize * scale);
   const lineHeightRatio = 1.4;
-  const contentPadding = styles.messageGap;
+  const contentPadding = Math.round(styles.messageGap * scale);
 
 
   
@@ -344,8 +340,11 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const senderNameHeightRatio = defaultLayoutConfig.avatarSection.senderName.heightRatio;
   const senderNameHeight = avatarSize * senderNameHeightRatio;
   
-  // 红包消息的固定高度（主体区域70px + 底部32px）
-  const redPacketHeight = 102;
+  // 特殊消息的固定高度（按比例缩放）
+  const redPacketHeight = Math.round(102 * scale);
+  const transferHeight = Math.round(120 * scale);
+  const voiceBubbleHeight = Math.round(40 * scale);
+  const imageBubbleHeight = Math.round(200 * scale);
   
   // 行高在循环外计算一次
   const lineHeightPx = fontSize * lineHeightRatio;
@@ -360,12 +359,11 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     if (msg.type === 'redpacket') {
       bubbleHeight = redPacketHeight;
     } else if (msg.type === 'transfer') {
-      bubbleHeight = 120;
+      bubbleHeight = transferHeight;
     } else if (msg.type === 'voice' && msg.voice) {
-      // 语音消息：波形 24px + padding 上下各 8px = 40px
-      bubbleHeight = 40;
+      bubbleHeight = voiceBubbleHeight;
     } else if (msg.type === 'image') {
-      bubbleHeight = 200; // 图片消息固定高度
+      bubbleHeight = imageBubbleHeight;
     } else {
       bubbleHeight = textHeight + bubblePaddingV * 2;
     }
@@ -379,7 +377,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const voiceText = data.msg.voice.text;
       // 估算：假设每行约 15 字符
       const estimatedLines = Math.ceil(voiceText.length / 15);
-      const estimatedHeight = 40 + estimatedLines * lineHeightPx;
+      const estimatedHeight = voiceBubbleHeight + estimatedLines * lineHeightPx;
       data.bubbleHeight = estimatedHeight;
     }
   }
@@ -415,45 +413,58 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   // Draw status bar (mobile only)
   // ============================================================================
   if (isMobile) {
-    const statusBg = darkMode ? '#1a1a1a' : styles.headerBg;
-    const statusColor = darkMode ? '#888' : styles.headerColor;
-    ctx.fillStyle = statusBg;
-    ctx.fillRect(0, 0, width, statusBarHeight);
+    const showStatusBar = styles.showStatusBar !== false;
+    if (showStatusBar) {
+      const statusBg = darkMode ? '#1a1a1a' : (styles.statusBarBg || styles.headerBg);
+      const statusColor = darkMode ? '#888' : (styles.statusBarColor || styles.headerColor);
+      ctx.fillStyle = statusBg;
+      ctx.fillRect(0, 0, width, statusBarHeight);
 
-    ctx.fillStyle = statusColor;
-    ctx.font = `500 10px "${styles.fontFamily.replace(/"/g, '')}"`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('10:30', 8, statusBarHeight / 2);
+      const statusFontSize = Math.round(10 * scale);
+      ctx.fillStyle = statusColor;
+      ctx.font = `500 ${statusFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('10:30', Math.round(8 * scale), statusBarHeight / 2);
 
-    // Signal bars
-    const signalX = width - 80;
-    const signalY = statusBarHeight / 2;
-    ctx.fillStyle = statusColor;
-    for (let i = 0; i < 4; i++) {
-      const barH = 4 + i * 2;
-      ctx.fillRect(signalX + i * 5, signalY - barH / 2, 3, barH);
+      // Signal bars (from tallest (left) to shortest (right))
+      const signalX = width - Math.round(80 * scale);
+      const signalY = statusBarHeight / 2;
+      ctx.fillStyle = statusColor;
+      for (let i = 0; i < 4; i++) {
+        const barH = Math.round((12 - i * 2) * scale); // 12, 10, 8, 6 - tallest to shortest
+        const barW = Math.round(3 * scale);
+        const barGap = Math.round(5 * scale);
+        ctx.fillRect(signalX + i * barGap, signalY - barH / 2, barW, barH);
+      }
+
+      // WiFi icon
+      const wifiX = width - Math.round(50 * scale);
+      const wifiR1 = Math.round(2 * scale);
+      const wifiR2 = Math.round(5 * scale);
+      const wifiR3 = Math.round(8 * scale);
+      ctx.beginPath();
+      ctx.arc(wifiX, signalY, wifiR1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(wifiX, signalY, wifiR2, Math.PI, 0, true);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(wifiX, signalY, wifiR3, Math.PI, 0, true);
+      ctx.stroke();
+
+      // Battery icon
+      const batteryX = width - Math.round(30 * scale);
+      const batteryW = Math.round(16 * scale);
+      const batteryH = Math.round(8 * scale);
+      const batteryNubW = Math.round(2 * scale);
+      const batteryNubH = Math.round(4 * scale);
+      ctx.strokeStyle = statusColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(batteryX, signalY - batteryH / 2, batteryW, batteryH);
+      ctx.fillRect(batteryX + 1, signalY - batteryH / 2 + Math.round(scale), batteryW - 2, batteryH - Math.round(2 * scale));
+      ctx.fillRect(batteryX + batteryW, signalY - batteryNubH / 2, batteryNubW, batteryNubH);
     }
-
-    // WiFi icon
-    const wifiX = width - 50;
-    ctx.beginPath();
-    ctx.arc(wifiX, signalY, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(wifiX, signalY, 5, Math.PI, 0, true);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(wifiX, signalY, 8, Math.PI, 0, true);
-    ctx.stroke();
-
-    // Battery icon
-    const batteryX = width - 30;
-    ctx.strokeStyle = statusColor;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(batteryX, signalY - 4, 16, 8);
-    ctx.fillRect(batteryX + 1, signalY - 3, 12, 6);
-    ctx.fillRect(batteryX + 16, signalY - 2, 2, 4);
   }
 
   // ============================================================================
@@ -462,10 +473,10 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   ctx.fillStyle = darkMode ? '#2d2d2d' : styles.headerBg;
   ctx.fillRect(0, statusBarHeight, width, headerHeight);
 
-  const headerFontSize = Math.max(12, fontSize * 0.9);
+  const headerFontSize = Math.max(Math.round(12 * scale), Math.round(fontSize * 0.9));
   ctx.fillStyle = darkMode ? '#ffffff' : styles.headerColor;
   ctx.font = `500 ${headerFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
-  ctx.textAlign = 'left';
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(title, width / 2, statusBarHeight + headerHeight / 2);
 
@@ -497,21 +508,25 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const systemStyle = getSystemMessageStyleForCanvas(msg.system.type);
       const systemText = msg.system.text;
       
-      ctx.font = `12px "${styles.fontFamily.replace(/"/g, '')}"`;
-      const textWidth = ctx.measureText(systemText).width + 40;
+      const systemFontSize = Math.round(12 * scale);
+      const systemPaddingH = Math.round(20 * scale);
+      const systemHeight = Math.round(30 * scale);
+      
+      ctx.font = `${systemFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      const textWidth = ctx.measureText(systemText).width + systemPaddingH * 2;
       const systemX = (width - textWidth) / 2;
       const systemY = y;
       
-      drawBubble(ctx, systemX, systemY, textWidth, 30, 12, systemStyle.bg);
+      drawBubble(ctx, systemX, systemY, textWidth, systemHeight, Math.round(12 * scale), systemStyle.bg);
       
       ctx.fillStyle = systemStyle.color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `12px "${styles.fontFamily.replace(/"/g, '')}"`;
-      ctx.fillText(`${systemStyle.icon} ${systemText}`, width / 2, systemY + 15);
+      ctx.font = `${systemFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.fillText(`${systemStyle.icon} ${systemText}`, width / 2, systemY + systemHeight / 2);
       ctx.font = `${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       
-      y += 30 + gap;
+      y += systemHeight + gap;
       continue;
     }
 
@@ -557,11 +572,11 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     );
     
     // 红包消息的固定宽度
-    const redPacketWidth = 180;
+    const redPacketWidth = Math.round(180 * scale);
     // 转账消息的最小宽度
-    const transferMinWidth = 180;
+    const transferMinWidth = Math.round(180 * scale);
     // 图片消息的固定宽度（正方形）
-    const imageWidth = msg.type === 'image' ? 200 : 0;
+    const imageWidth = msg.type === 'image' ? Math.round(200 * scale) : 0;
     
     let actualMaxLineWidth: number;
     if (msg.type === 'redpacket') {
@@ -569,10 +584,10 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     } else if (msg.type === 'transfer') {
       actualMaxLineWidth = Math.max(maxLineWidth, transferMinWidth);
     } else if (msg.type === 'voice' && msg.voice) {
-      // 语音消息宽度计算：图标(16) + 波形(可变) + 时长(估算30) + padding
-      const iconArea = 16;
-      const durationArea = 40;
-      const waveformArea = Math.max(60, (msg.voice.duration || 5) * 8 + 20);
+      // 语音消息宽度计算：图标 + 波形(可变) + 时长 + padding（都按scale缩放）
+      const iconArea = Math.round(16 * scale);
+      const durationArea = Math.round(40 * scale);
+      const waveformArea = Math.max(Math.round(60 * scale), Math.round((msg.voice.duration || 5) * 8 * scale));
       const voiceControlWidth = bubblePaddingH + iconArea + bubblePaddingH + waveformArea + durationArea + bubblePaddingH;
       
       // 如果有文字，估算文字需要的宽度
@@ -607,7 +622,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
         const voiceText = msg.voice.text;
         const textContentWidth = bubbleWidth - bubblePaddingH * 2;
         const voiceLineCount = countTextLines(ctx, voiceText, textContentWidth, fontSize, styles.fontFamily);
-        return 40 + voiceLineCount * lineHeightPx;
+        return Math.round(40 * scale) + voiceLineCount * lineHeightPx;
       })()
       : bubbleHeight;
     
@@ -625,17 +640,19 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
 
     // 检查是否为红包消息
     if (msg.type === 'redpacket' && msg.redPacket) {
-      // DEBUG: 检查绘制位置
-      console.log(`[Canvas] 红包消息绘制位置: bubbleX=${bubbleX}, bubbleY=${bubbleY}, bubbleWidth=${bubbleWidth}, bubbleHeight=${bubbleHeight}`);
-      
       // 绘制红包消息（使用样式配置）
       drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius, '#fff');
       const redPacket = msg.redPacket;
-      const s: MessageStyleConfig = getRedPacketStyle('wechat'); // 使用消息的平台样式
       
-      // 计算各部分高度（按比例）
-      const iconSize = s.icon?.size || 48;
-      const bodyHeight = bubbleHeight - (s.footer?.height || 32);
+      // 计算各部分高度（按比例缩放）
+      const iconSize = Math.round(48 * scale);
+      const bodyPadding = Math.round(12 * scale);
+      const footerHeight = Math.round(32 * scale);
+      const bodyHeight = bubbleHeight - footerHeight;
+      const iconFontSize = Math.round(iconSize * 0.5);
+      const titleFontSize = Math.round(16 * scale);
+      const contentFontSize = Math.round(12 * scale);
+      const footerFontSize = Math.round(11 * scale);
       
       // 1. 绘制主体区域（橙红色渐变）
       const gradient = ctx.createLinearGradient(bubbleX, bubbleY, bubbleX + bubbleWidth, bubbleY + bodyHeight);
@@ -656,36 +673,36 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fill();
       
       // 2. 绘制钱袋图标（黄色圆形）
-      const iconX = bubbleX + (s.body?.padding || 12);
+      const iconX = bubbleX + bodyPadding;
       const iconY = bubbleY + (bodyHeight - iconSize) / 2;
-      ctx.fillStyle = s.icon?.background || '#FFD700';
+      ctx.fillStyle = '#FFD700';
       ctx.beginPath();
       ctx.arc(iconX + iconSize/2, iconY + iconSize/2, iconSize/2, 0, Math.PI * 2);
       ctx.fill();
       
       // 钱袋图标内文字
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${iconSize * 0.5}px sans-serif`;
+      ctx.font = `bold ${iconFontSize}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('🧧', iconX + iconSize/2, iconY + iconSize/2);
       
       // 3. 绘制标题"红包"（白色，加粗）
-      const contentX = iconX + iconSize + 12;
-      ctx.fillStyle = s.title?.color || '#fff';
-      ctx.font = `bold ${s.title?.fontSize || 16}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      const contentX = iconX + iconSize + Math.round(12 * scale);
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${titleFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('红包', contentX, iconY + 6);
+      ctx.fillText('红包', contentX, iconY + Math.round(6 * scale));
       
       // 4. 绘制祝福语（白色，小字）
-      ctx.fillStyle = s.content?.color || 'rgba(255,255,255,0.9)';
-      ctx.font = `${s.content?.fontSize || 12}px "${styles.fontFamily.replace(/"/g, '')}"`;
-      ctx.fillText(redPacket.greeting, contentX, iconY + (s.title?.fontSize || 16) + 10);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `${contentFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.fillText(redPacket.greeting, contentX, iconY + titleFontSize + Math.round(10 * scale));
       
       // 5. 绘制底部状态栏（白色背景）
-      ctx.fillStyle = s.footer?.background || 'rgba(255,255,255,0.95)';
-      ctx.fillRect(bubbleX, bubbleY + bodyHeight, bubbleWidth, s.footer?.height || 32);
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillRect(bubbleX, bubbleY + bodyHeight, bubbleWidth, footerHeight);
       
       // 分割线
       ctx.strokeStyle = 'rgba(0,0,0,0.1)';
@@ -696,22 +713,25 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.stroke();
       
       // 状态文字（灰色）
-      ctx.fillStyle = s.footer?.color || '#999';
-      ctx.font = `${s.footer?.fontSize || 11}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.fillStyle = '#999';
+      ctx.font = `${footerFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const statusText = redPacket.isOpened ? `已领取 ¥${(redPacket.amount / 100).toFixed(2)}` : '领取红包';
-      ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + (s.footer?.height || 32) / 2);
+      ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + footerHeight / 2);
       
     } else if (msg.type === 'transfer' && msg.transfer) {
-      // DEBUG: 检查绘制位置
-      console.log(`[Canvas] 转账消息绘制位置: bubbleX=${bubbleX}, bubbleY=${bubbleY}, bubbleWidth=${bubbleWidth}, bubbleHeight=${bubbleHeight}`);
-      
       // 绘制转账消息
       const transfer = msg.transfer;
-      const s: MessageStyleConfig = getRedPacketStyle('wechat'); // 使用样式配置
-      const iconSize = s.icon?.size || 44;
-      const bodyHeight = bubbleHeight - (s.footer?.height || 32);
+      
+      // 计算各部分高度（按比例缩放）
+      const iconSize = Math.round(44 * scale);
+      const bodyPadding = Math.round(12 * scale);
+      const footerHeight = Math.round(32 * scale);
+      const bodyHeight = bubbleHeight - footerHeight;
+      const titleFontSize = Math.round(16 * scale);
+      const amountFontSize = Math.round(18 * scale);
+      const footerFontSize = Math.round(11 * scale);
       
       // 1. 绘制主体区域（灰色背景）
       ctx.fillStyle = '#f5f5f5';
@@ -727,7 +747,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fill();
       
       // 2. 绘制转账图标（绿色圆形）
-      const iconX = bubbleX + (s.body?.padding || 12);
+      const iconX = bubbleX + bodyPadding;
       const iconY = bubbleY + (bodyHeight - iconSize) / 2;
       ctx.fillStyle = '#07c160'; // 微信绿
       ctx.beginPath();
@@ -736,27 +756,27 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       
       // 图标内文字 "¥"
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${iconSize * 0.45}px sans-serif`;
+      ctx.font = `bold ${Math.round(iconSize * 0.45)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('¥', iconX + iconSize/2, iconY + iconSize/2);
       
       // 3. 绘制标题"转账"（深色）
-      const contentX = iconX + iconSize + 12;
+      const contentX = iconX + iconSize + Math.round(12 * scale);
       ctx.fillStyle = '#333';
-      ctx.font = `bold ${s.title?.fontSize || 16}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.font = `bold ${titleFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('转账', contentX, iconY + 4);
+      ctx.fillText('转账', contentX, iconY + Math.round(4 * scale));
       
       // 4. 绘制金额（大号深色）
       ctx.fillStyle = '#333';
-      ctx.font = `bold ${(s.title?.fontSize || 16) + 2}px "${styles.fontFamily.replace(/"/g, '')}"`;
-      ctx.fillText(`¥${(transfer.amount / 100).toFixed(2)}`, contentX, iconY + (s.title?.fontSize || 16) + 10);
+      ctx.font = `bold ${amountFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.fillText(`¥${(transfer.amount / 100).toFixed(2)}`, contentX, iconY + titleFontSize + Math.round(10 * scale));
       
       // 5. 绘制底部状态栏（白色背景）
       ctx.fillStyle = '#fff';
-      ctx.fillRect(bubbleX, bubbleY + bodyHeight, bubbleWidth, s.footer?.height || 32);
+      ctx.fillRect(bubbleX, bubbleY + bodyHeight, bubbleWidth, footerHeight);
       
       // 分割线
       ctx.strokeStyle = '#e0e0e0';
@@ -768,24 +788,25 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       
       // 状态文字（绿色表示已收款，灰色表示待收款）
       ctx.fillStyle = transfer.isReceived ? '#07c160' : '#999';
-      ctx.font = `${s.footer?.fontSize || 11}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.font = `${footerFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const statusText = transfer.isReceived ? '已收款' : '待收款';
-      ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + (s.footer?.height || 32) / 2);
+      ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + footerHeight / 2);
       
     } else if (msg.type === 'voice' && msg.voice) {
       const voice = msg.voice;
-      const iconSize = 16;
-      const waveHeight = 24;
-      const barWidth = 3;
-      const barGap = 2;
-      const waveAreaHeight = 40;
+      const iconSize = Math.round(16 * scale);
+      const waveHeight = Math.round(24 * scale);
+      const barWidth = Math.max(1, Math.round(3 * scale));
+      const barGap = Math.max(1, Math.round(2 * scale));
+      const waveAreaHeight = Math.round(40 * scale);
+      const durationFontSize = Math.round(12 * scale);
       
       // 时长文字宽度（估算）
       const durationText = `${voice.duration}"`;
-      ctx.font = `12px "${styles.fontFamily.replace(/"/g, '')}"`;
-      const durationWidth = ctx.measureText(durationText).width + 8;
+      ctx.font = `${durationFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      const durationWidth = ctx.measureText(durationText).width + Math.round(8 * scale);
       
       // 波形区域宽度 = 气泡宽度 - 左侧padding - 图标 - 时长区域
       const waveRegionWidth = bubbleWidth - bubblePaddingH * 2 - iconSize - bubblePaddingH - durationWidth;
@@ -835,7 +856,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       
       // 绘制时长 - 垂直居中
       ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.8)' : (isUser ? 'rgba(255,255,255,0.8)' : '#999');
-      ctx.font = `12px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.font = `${durationFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       const durationX = waveRightX;
@@ -848,8 +869,8 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
         ctx.textBaseline = 'middle';
         
         const textContentWidth = bubbleWidth - bubblePaddingH * 2;
-        const textTopPadding = 6;
-        const textBottomPadding = 6;
+        const textTopPadding = Math.round(6 * scale);
+        const textBottomPadding = Math.round(6 * scale);
         
         const textFragments = parseFragments(voice.text);
         const textLines = wrapTextFragments(ctx, textFragments, textContentWidth, emojiSize);
@@ -894,9 +915,11 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       }
     } else if (msg.type === 'image' && msg.image) {
       // 绘制图片消息（正方形）
-      const imgPadding = 4;
+      const imgPadding = Math.round(4 * scale);
       const imgSize = bubbleWidth - imgPadding * 2; // 正方形图片大小
       const imgBubbleHeight = imgSize; // 图片气泡高度等于图片大小
+      const iconOuterRadius = Math.round(12 * scale);
+      const iconInnerRadius = Math.round(8 * scale);
       
       // 使用 ctx.save 和 ctx.clip 裁剪图片区域
       ctx.save();
@@ -938,11 +961,11 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
             // 图片未加载，显示图片图标
             ctx.fillStyle = '#ccc';
             ctx.beginPath();
-            ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, 12, 0, Math.PI * 2);
+            ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconOuterRadius, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, 8, 0, Math.PI * 2);
+            ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconInnerRadius, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -950,11 +973,11 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
         // 没有图片URL，显示图片图标
         ctx.fillStyle = '#ccc';
         ctx.beginPath();
-        ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, 12, 0, Math.PI * 2);
+        ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconOuterRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, 8, 0, Math.PI * 2);
+        ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconInnerRadius, 0, Math.PI * 2);
         ctx.fill();
       }
       

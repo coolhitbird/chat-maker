@@ -257,6 +257,7 @@ export function getVisibleContentAtTime(
   let text = '';
   let currentIndex = 0;
   let backspaceCount = 0;
+  let lastTypingTimestamp = 0;
 
   for (const event of sequence.events) {
     if (event.timestamp > elapsedTime) break;
@@ -265,10 +266,12 @@ export function getVisibleContentAtTime(
       case 'char':
         text += event.content;
         currentIndex++;
+        lastTypingTimestamp = event.timestamp;
         break;
       case 'emoji':
         text += event.content;
         currentIndex++;
+        lastTypingTimestamp = event.timestamp;
         break;
       case 'backspace':
         if (text.length > 0) {
@@ -280,20 +283,25 @@ export function getVisibleContentAtTime(
           }
         }
         backspaceCount++;
+        lastTypingTimestamp = event.timestamp;
         break;
       case 'pause':
         break;
       case 'paste-flash':
         text += event.content || '';
         currentIndex += (event.content || '').length;
+        lastTypingTimestamp = event.timestamp;
         break;
     }
   }
 
+  const isTyping = elapsedTime < sequence.totalDuration && 
+                   elapsedTime - lastTypingTimestamp < 500;
+
   return {
     text,
     currentIndex,
-    isTyping: elapsedTime < sequence.totalDuration,
+    isTyping,
   };
 }
 
@@ -302,7 +310,7 @@ export function estimateDuration(
   config: TypingAnimationConfig
 ): number {
   if (!config.enabled || config.fastMode) {
-    return messages.length * 1000;
+    return messages.length;
   }
 
   let totalMs = 0;
@@ -310,6 +318,11 @@ export function estimateDuration(
   for (const msg of messages) {
     if (msg.type === 'system') {
       totalMs += 1000;
+      continue;
+    }
+
+    if (msg.type === 'image' || msg.type === 'voice' || msg.type === 'redpacket' || msg.type === 'transfer' || msg.type === 'file') {
+      totalMs += 1500;
       continue;
     }
 
@@ -330,4 +343,45 @@ export function estimateDuration(
   }
 
   return Math.round(totalMs / 1000);
+}
+
+export function calculateSpeedMultiplier(
+  estimatedDuration: number,
+  targetDuration: number
+): number {
+  if (estimatedDuration <= 0) return 1.0;
+  
+  const multiplier = estimatedDuration / targetDuration;
+  
+  return Math.max(0.1, Math.min(4.0, multiplier));
+}
+
+export interface DurationRange {
+  min: number;
+  max: number;
+  recommended: number;
+}
+
+export function calculateDurationRange(
+  messages: Message[]
+): DurationRange {
+  if (messages.length === 0) {
+    return { min: 2, max: 10, recommended: 5 };
+  }
+
+  const msgCount = messages.length;
+  const standardDuration = msgCount * 0.5;
+  
+  const minDuration = Math.round(standardDuration / 4);
+  const maxDuration = Math.round(standardDuration / 0.1);
+  
+  const min = Math.max(2, minDuration);
+  const max = Math.max(min + 2, Math.min(120, maxDuration));
+  const recommended = Math.round((min + max) / 2);
+  
+  return {
+    min,
+    max,
+    recommended: Math.max(min, Math.min(max, recommended))
+  };
 }

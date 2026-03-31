@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import MessageList from '@/components/editor/MessageList';
 import MessageInput from '@/components/editor/MessageInput';
@@ -9,10 +9,8 @@ import Preview from '@/components/preview/Preview';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
-  const [importStatus, setImportStatus] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
-  const { project, updateChatTitle, exportProject, importProject, userSettings, saveCurrentProject, updateUserSettings } = useChatStore();
+  const { userSettings, saveCurrentProject, updateUserSettings } = useChatStore();
 
   const isDark = userSettings.theme === 'dark';
 
@@ -51,51 +49,6 @@ function App() {
 
   const toggleTheme = () => {
     updateUserSettings({ theme: isDark ? 'light' : 'dark' });
-  };
-
-  const handleExport = () => {
-    const data = exportProject();
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chat-project-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const data = JSON.parse(content);
-
-        if (!data.version || !data.project) {
-          throw new Error('无效的项目文件格式');
-        }
-
-        importProject(data);
-        setImportStatus('导入成功！');
-        setTimeout(() => setImportStatus(''), 3000);
-      } catch (err) {
-        setImportStatus('导入失败：' + (err as Error).message);
-        setTimeout(() => setImportStatus(''), 5000);
-      }
-    };
-    reader.readAsText(file);
-    
-    e.target.value = '';
   };
 
   return (
@@ -170,55 +123,6 @@ function App() {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                 <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">批量导入</h2>
                 <TextImporter />
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">快捷操作</h2>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">聊天标题</label>
-                    <input
-                      type="text"
-                      value={project.chatTitle}
-                      onChange={e => updateChatTitle(e.target.value)}
-                      placeholder="显示在聊天顶部的标题"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleExport}
-                      className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
-                    >
-                      导出项目
-                    </button>
-                    <button
-                      onClick={handleImportClick}
-                      className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
-                    >
-                      导入项目
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".json"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </div>
-                  {importStatus && (
-                    <div className={`text-sm text-center py-2 rounded ${
-                      importStatus.includes('成功') ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'
-                    }`}>
-                      {importStatus}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => useChatStore.getState().clearMessages()}
-                    className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                  >
-                    清空所有消息
-                  </button>
-                </div>
               </div>
             </div>
           </div>

@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import type { StoredProject } from '@/types';
 
 export default function ProjectList() {
   const {
+    project,
+    updateChatTitle,
     projects,
     currentProjectId,
     createProject,
@@ -11,11 +13,61 @@ export default function ProjectList() {
     deleteProject,
     duplicateProject,
     updateProjectName,
+    saveCurrentProject,
+    exportProject,
+    importProject,
   } = useChatStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [importStatus, setImportStatus] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = () => {
+    const data = exportProject();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-project-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const data = JSON.parse(content);
+
+        if (!data.version || !data.project) {
+          throw new Error('无效的项目文件格式');
+        }
+
+        importProject(data);
+        setImportStatus('导入成功！');
+        setTimeout(() => setImportStatus(''), 3000);
+      } catch (err) {
+        setImportStatus('导入失败：' + (err as Error).message);
+        setTimeout(() => setImportStatus(''), 5000);
+      }
+    };
+    reader.readAsText(file);
+    
+    e.target.value = '';
+  };
 
   const currentProject = projects.find((p: StoredProject) => p.id === currentProjectId);
 
@@ -175,8 +227,52 @@ export default function ProjectList() {
         )}
       </div>
 
-      <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
-        双击项目名可快速重命名
+      <div className="mt-3">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">聊天标题</label>
+        <input
+          type="text"
+          value={project.chatTitle}
+          onChange={e => updateChatTitle(e.target.value)}
+          placeholder="显示在聊天顶部的标题"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm"
+        />
+      </div>
+
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+        <div className="flex gap-2">
+          <button
+            onClick={() => { saveCurrentProject(); }}
+            className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            保存项目
+          </button>
+          <button
+            onClick={handleExport}
+            className="flex-1 px-3 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors"
+          >
+            导出项目
+          </button>
+          <button
+            onClick={handleImportClick}
+            className="flex-1 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            导入项目
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
+        {importStatus && (
+          <div className={`mt-2 text-xs text-center py-1 rounded ${
+            importStatus.includes('成功') ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'
+          }`}>
+            {importStatus}
+          </div>
+        )}
       </div>
     </div>
   );

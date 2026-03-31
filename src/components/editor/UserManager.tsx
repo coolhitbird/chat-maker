@@ -54,6 +54,16 @@ export default function UserManager() {
     setNewUserName('');
   };
 
+  const handleSetMainUser = (userIndex: number) => {
+    if (userIndex === 0) return;
+    moveUserUp(userIndex);
+  };
+
+  const handleSwapWithMain = (userIndex: number) => {
+    if (userIndex <= 0) return;
+    moveUserDown(userIndex - 1);
+  };
+
   const handleStartEdit = (user: UserProfile) => {
     setEditingId(user.id);
     setEditingName(user.name);
@@ -86,7 +96,7 @@ export default function UserManager() {
     <div className="space-y-4">
       {/* 说明 */}
       <div className="text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/30 p-2 rounded">
-        💡 第一位用户（当事人）的消息显示在右侧，其他人显示在左侧
+        💡 点击「右侧/左侧」标签可切换当事人位置。当事人（绿色标签）显示在右侧
       </div>
 
       {/* 添加用户表单 */}
@@ -161,20 +171,30 @@ export default function UserManager() {
                   autoFocus
                 />
               ) : (
-                <span
-                  className="flex-1 text-sm cursor-pointer hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400"
-                  onClick={() => handleStartEdit(user)}
-                >
-                  {user.name}
-                  {index === 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-green-500 text-white text-xs rounded">
-                      当事人
-                    </span>
-                  )}
-                  <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">
-                    ({user.role === 'user' ? '右侧' : '左侧'})
-                  </span>
-                </span>
+                <div className="flex-1 min-w-0">
+                  <div 
+                    className="text-sm cursor-pointer hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400 truncate"
+                    onClick={() => handleStartEdit(user)}
+                  >
+                    {user.name}
+                    {index === 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-green-500 text-white text-xs rounded">
+                        当事人
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => index === 0 ? handleSwapWithMain(index) : handleSetMainUser(index)}
+                    className={`mt-0.5 px-2 py-0.5 text-xs rounded border transition-colors ${
+                      index === 0 
+                        ? 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400' 
+                        : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer'
+                    }`}
+                    title={index === 0 ? '点击与下一位交换位置' : '点击设为当事人（显示在右侧）'}
+                  >
+                    {index === 0 ? '右侧 ▼' : '左侧 ▲'}
+                  </button>
+                </div>
               )}
 
               <button

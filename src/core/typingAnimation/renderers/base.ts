@@ -182,7 +182,86 @@ export interface MessageRenderData {
   msg: Message;
   visibleContent: string;
   isTyping: boolean;
+  isCurrentTyping: boolean;
   bubbleWidth: number;
   bubbleHeight: number;
   totalHeight: number;
+}
+
+export function drawTypingVoice(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  bubbleWidth: number,
+  _bubbleHeight: number,
+  bubblePadding: number,
+  fontSize: number,
+  duration: number,
+  transcriptionText: string,
+  textColor: string,
+  lineHeight: number,
+  darkMode: boolean
+): { width: number; height: number } {
+  ctx.fillStyle = textColor;
+  ctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+  ctx.textBaseline = 'top';
+
+  const playIcon = '▶';
+  const durationText = `${Math.round(duration)}"`;
+  const playWidth = ctx.measureText(playIcon).width;
+  const durationWidth = ctx.measureText(durationText).width;
+  const iconGap = 4;
+  const iconLineHeight = fontSize * 1.2;
+
+  let contentX = x + bubblePadding;
+  let contentY = y + bubblePadding;
+
+  ctx.fillStyle = darkMode ? '#888' : '#666';
+  ctx.font = `${fontSize * 1.2}px sans-serif`;
+  ctx.fillText(playIcon, contentX, contentY);
+  contentX += playWidth + iconGap;
+
+  ctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+  ctx.fillText(durationText, contentX, contentY);
+  contentX += durationWidth + iconGap * 2;
+
+  const waveformBars = 6;
+  const barWidth = 3;
+  const barGap = 2;
+  const maxBarHeight = fontSize;
+  for (let i = 0; i < waveformBars; i++) {
+    const barHeight = (Math.sin(i * 0.8) * 0.5 + 0.5) * maxBarHeight * 0.7 + maxBarHeight * 0.2;
+    const barX = contentX + i * (barWidth + barGap);
+    const barY = contentY + (maxBarHeight - barHeight) / 2;
+    ctx.fillStyle = darkMode ? '#666' : '#999';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+  }
+  contentX += waveformBars * (barWidth + barGap) + iconGap;
+
+  if (transcriptionText) {
+    contentY += iconLineHeight + 4;
+    contentX = x + bubblePadding;
+
+    const maxTextWidth = bubbleWidth - bubblePadding * 2;
+    const textResult = drawTypingText(
+      ctx,
+      transcriptionText,
+      contentX,
+      contentY,
+      maxTextWidth,
+      fontSize,
+      textColor,
+      lineHeight
+    );
+
+    return {
+      width: Math.max(contentX + textResult.width - x, bubbleWidth),
+      height: iconLineHeight + textResult.height + bubblePadding * 2 + 4,
+    };
+  }
+
+  return {
+    width: contentX - (x + bubblePadding) + bubblePadding,
+    height: iconLineHeight + bubblePadding * 2,
+  };
 }

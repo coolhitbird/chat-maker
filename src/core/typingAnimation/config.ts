@@ -2,7 +2,7 @@ import type { TypingAnimationConfig } from './types';
 
 export const DEFAULT_TYPING_CONFIG: TypingAnimationConfig = {
   enabled: false,
-  renderMode: 'loop',
+  renderMode: 'simple',
   baseSpeed: 80,
   speedVariance: 40,
   charChance: 0.5,
@@ -23,6 +23,7 @@ export const DEFAULT_TYPING_CONFIG: TypingAnimationConfig = {
   cursorEnabled: true,
   cursorBlinkRate: 530,
   fastMode: false,
+  targetDuration: 30,
 };
 
 export function createTypingConfig(partial?: Partial<TypingAnimationConfig>): TypingAnimationConfig {

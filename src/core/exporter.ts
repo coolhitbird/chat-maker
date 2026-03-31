@@ -9,6 +9,20 @@ interface PlatformExportConfig {
   styles: ThemeStyles & { deviceType?: 'mobile' | 'desktop' };
 }
 
+const BASE_WIDTH = 375;
+
+function scaleStyles(styles: ThemeStyles & { deviceType?: 'mobile' | 'desktop' }, targetWidth: number): ThemeStyles & { deviceType?: 'mobile' | 'desktop' } {
+  const scale = targetWidth / BASE_WIDTH;
+  return {
+    ...styles,
+    fontSize: Math.round(styles.fontSize * scale),
+    bubblePadding: Math.round(styles.bubblePadding * scale),
+    bubbleRadius: Math.round(styles.bubbleRadius * scale),
+    avatarSize: Math.round(styles.avatarSize * scale),
+    messageGap: Math.round(styles.messageGap * scale),
+  };
+}
+
 // ============================================================================
 // DOM-based Image Export — 保证与 CSS 预览100%一致
 // 原理：创建与预览完全相同的 DOM 结构，用 html2canvas 截图
@@ -83,27 +97,29 @@ export function generateChatHtml(
   chatTitle?: string,
   users?: UserProfile[]
 ): string {
-  const { styles } = config;
-  const headerHeight = styles.avatarSize + 8;
+  const scaledStyles = scaleStyles(config.styles, width);
+  const headerHeight = scaledStyles.avatarSize + Math.round(8 * (width / BASE_WIDTH));
 
   const userAvatarMap = new Map<string, string>();
   if (users) {
     users.forEach(u => userAvatarMap.set(u.name, u.avatar));
   }
 
+  const scaledConfig = { ...config, styles: scaledStyles };
+
   let messagesHtml = '';
   for (let i = 0; i < messages.length; i++) {
-    messagesHtml += getMessageHtml(messages[i], i, config, userAvatarMap);
+    messagesHtml += getMessageHtml(messages[i], i, scaledConfig, userAvatarMap);
   }
 
   const title = escapeHtml(chatTitle || config.name);
 
   return `
-    <div style="width: ${width}px; height: ${height}px; background-color: ${styles.background}; display: flex; flex-direction: column; overflow: hidden; font-family: ${styles.fontFamily};">
-      <div style="height: ${headerHeight}px; background-color: ${styles.headerBg}; color: ${styles.headerColor}; display: flex; align-items: center; justify-content: center; font-size: ${styles.fontSize}px; font-weight: 500;">
+    <div style="width: ${width}px; height: ${height}px; background-color: ${scaledStyles.background}; display: flex; flex-direction: column; overflow: hidden; font-family: ${scaledStyles.fontFamily};">
+      <div style="height: ${headerHeight}px; background-color: ${scaledStyles.headerBg}; color: ${scaledStyles.headerColor}; display: flex; align-items: center; justify-content: center; font-size: ${scaledStyles.fontSize}px; font-weight: 500;">
         ${title}
       </div>
-      <div style="flex: 1; overflow-y: auto; padding: ${styles.messageGap}px; background-color: ${styles.background};">
+      <div style="flex: 1; overflow-y: auto; padding: ${scaledStyles.messageGap}px; background-color: ${scaledStyles.background};">
         ${messagesHtml}
       </div>
     </div>
@@ -380,7 +396,8 @@ export class Exporter {
     settings: ExportSettings,
     platformConfig: PlatformExportConfig,
     onProgress: (progress: number) => void,
-    darkMode: boolean = false
+    darkMode: boolean = false,
+    framesPerMessage?: number
   ): Promise<Blob> {
     if (!this.ffmpeg || !this.loaded) {
       await this.init();
@@ -415,8 +432,8 @@ export class Exporter {
     await document.fonts.ready;
 
     const dpr = window.devicePixelRatio || 1;
-    const framesPerMessage = fps;
-    const finalFramePause = fps * 2;
+    const framesPerMsg = framesPerMessage ?? Math.round(fps / 2);
+    const finalFramePause = framesPerMessage ?? fps;
 
     let frameIndex = 0;
 
@@ -435,7 +452,7 @@ export class Exporter {
 
       const totalContentHeight = canvas.height / dpr;
 
-      for (let f = 0; f < framesPerMessage; f++) {
+      for (let f = 0; f < framesPerMsg; f++) {
         const targetCanvas = document.createElement('canvas');
         targetCanvas.width = width * dpr;
         targetCanvas.height = height * dpr;

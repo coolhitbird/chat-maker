@@ -13,6 +13,8 @@ export interface ExtendedThemeStyles extends ThemeStyles {
   bubbleShadow?: string;
   inputBg?: string;
   statusBarColor?: string;
+  statusBarBg?: string;
+  showStatusBar?: boolean;
   deviceType?: 'mobile' | 'desktop';
 }
 

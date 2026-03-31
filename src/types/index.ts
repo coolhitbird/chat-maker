@@ -96,6 +96,8 @@ export interface ThemeStyles {
   bubbleRightBorder?: string;
   inputBg?: string;
   statusBarColor?: string;
+  statusBarBg?: string;
+  showStatusBar?: boolean;
 }
 
 export interface PlatformTheme {

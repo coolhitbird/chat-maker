@@ -14,7 +14,7 @@ export interface MessageTypingSequence {
   visibleText: string;
 }
 
-export type RenderMode = 'loop' | 'content' | 'dom';
+export type RenderMode = 'simple' | 'loop' | 'content' | 'dom';
 
 export interface TypingAnimationConfig {
   enabled: boolean;
@@ -39,6 +39,7 @@ export interface TypingAnimationConfig {
   cursorEnabled: boolean;
   cursorBlinkRate: number;
   fastMode: boolean;
+  targetDuration: number;
 }
 
 export interface MessageTypingState {

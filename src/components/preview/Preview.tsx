@@ -2,11 +2,13 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { getPlatformConfig } from '@/themes/wechat';
 import { allThemes } from '@/themes';
-import { Exporter, generateChatHtml } from '@/core/exporter';
+import { Exporter } from '@/core/exporter';
 import ChatContainer from './ChatContainer';
-import { TypingSettingsModal, generateTypingSequence, estimateDuration, loopTypingRenderer, contentTypingRenderer, domTypingRenderer } from '@/core/typingAnimation';
+import { TypingSettingsModal, generateTypingSequence, loopTypingRenderer, contentTypingRenderer, domTypingRenderer, calculateDurationRange } from '@/core/typingAnimation';
+import { typingVideoExporter } from '@/core/typingAnimation/exporters/VideoExporter';
 import type { TypingAnimationConfig, MessageTypingSequence } from '@/core/typingAnimation';
 import { DEFAULT_TYPING_CONFIG } from '@/core/typingAnimation';
+import type { ExportConfig } from '@/core/typingAnimation';
 
 export interface ResolutionOption {
   label: string;
@@ -47,19 +49,135 @@ export default function Preview() {
   const [typingProgress, setTypingProgress] = useState<Record<string, number>>({});
   const animationRef = useRef<number | null>(null);
   const isPlayingRef = useRef(false);
-  const [exportType, setExportType] = useState<'image' | 'video'>('image');
   const [exportStatus, setExportStatus] = useState<string>('');
   const [exportError, setExportError] = useState<string>('');
   const [showTypingSettings, setShowTypingSettings] = useState(false);
   const [typingConfig, setTypingConfig] = useState<TypingAnimationConfig>(DEFAULT_TYPING_CONFIG);
+  const [isExportingVideo, setIsExportingVideo] = useState(false);
+  const [simpleExportDuration, setSimpleExportDuration] = useState(5);
 
-  const estimatedDuration = useMemo(() => {
-    return estimateDuration(messages, typingConfig);
-  }, [messages, typingConfig]);
+  const durationRange = useMemo(() => {
+    if (messages.length === 0) return null;
+    return calculateDurationRange(messages);
+  }, [messages, typingConfig.enabled, typingConfig.fastMode, typingConfig.baseSpeed]);
+
+  const simpleDurationRange = useMemo(() => {
+    if (messages.length === 0) return { min: 1, max: 10 };
+    const standardDuration = messages.length * 0.5;
+    const min = Math.max(1, Math.round(standardDuration / 4));
+    const max = Math.max(min + 2, Math.round(standardDuration / 0.1));
+    return { min, max };
+  }, [messages]);
 
   const handleTypingConfigSave = useCallback((config: TypingAnimationConfig) => {
     setTypingConfig(config);
   }, []);
+
+  const handleExportTypingVideo = useCallback(async () => {
+    if (messages.length === 0) {
+      alert('没有消息，请先添加对话');
+      return;
+    }
+    if (isExportingVideo) return;
+
+    setIsExportingVideo(true);
+    setExportStatus('正在准备导出动画视频...');
+
+    try {
+      const exportConfig: ExportConfig = {
+        fps: 30,
+        width: settings.width,
+        height: settings.height,
+        styles: {
+          fontFamily: 'Microsoft YaHei, PingFang SC, sans-serif',
+          fontSize: 16,
+          avatarSize: 40,
+          bubblePadding: 12,
+          bubbleRadius: 18,
+          bubbleLeftBg: '#ffffff',
+          bubbleRightBg: '#95ec69',
+          bubbleLeftColor: '#1a1a1a',
+          bubbleRightColor: '#1a1a1a',
+          background: '#f5f5f5',
+          headerBg: '#f5f5f5',
+          headerColor: '#1a1a1a',
+        },
+      };
+
+      const config = { ...typingConfig, enabled: true };
+
+      let videoBlob: Blob;
+      const renderMode = typingConfig.renderMode;
+
+      if (renderMode === 'simple') {
+        setExportStatus(`正在导出... (简洁模式)`);
+        videoBlob = await typingVideoExporter.export(
+          messages,
+          config,
+          exportConfig,
+          [],
+          false,
+          (progress) => {
+            setExportStatus(`正在导出... ${progress}%`);
+          }
+        );
+      } else if (renderMode === 'loop') {
+        setExportStatus(`正在导出... (循环渲染模式)`);
+        videoBlob = await loopTypingRenderer.render(
+          messages,
+          config,
+          exportConfig,
+          [],
+          false,
+          (progress) => {
+            setExportStatus(`正在导出... ${progress}%`);
+          }
+        );
+      } else if (renderMode === 'content') {
+        setExportStatus(`正在导出... (内容修改模式)`);
+        videoBlob = await contentTypingRenderer.render(
+          messages,
+          config,
+          exportConfig,
+          [],
+          false,
+          (progress) => {
+            setExportStatus(`正在导出... ${progress}%`);
+          }
+        );
+      } else {
+        setExportStatus(`正在导出... (DOM动画模式)`);
+        videoBlob = await domTypingRenderer.render(
+          messages,
+          config,
+          exportConfig,
+          [],
+          false,
+          (progress) => {
+            setExportStatus(`正在导出... ${progress}%`);
+          }
+        );
+      }
+
+      const url = URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `typing-animation-${Date.now()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setExportStatus('导出成功！');
+      setTimeout(() => setExportStatus(''), 2000);
+    } catch (err) {
+      console.error('Export error:', err);
+      setExportError((err as Error).message);
+      setExportStatus('');
+    } finally {
+      setIsExportingVideo(false);
+    }
+  }, [messages, typingConfig, settings, isExportingVideo]);
 
   const config = getPlatformConfig(platform.id);
   const isMobile = config.deviceType === 'mobile';
@@ -97,7 +215,7 @@ export default function Preview() {
       
       if (msg.type === 'system') {
         setVisibleCount(i + 1);
-        await new Promise(resolve => setTimeout(resolve, settings.messageInterval));
+        await new Promise(resolve => setTimeout(resolve, 500));
       } else {
         setVisibleCount(i + 1);
         
@@ -123,7 +241,7 @@ export default function Preview() {
           setTypingProgress(prev => ({ ...prev, [msg.id]: msg.content?.length || 0 }));
         } else {
           const content = msg.content || '';
-          const charDelay = settings.typingSpeed;
+          const charDelay = 50;
           
           for (let charIdx = 1; charIdx <= content.length; charIdx++) {
             if (!isPlayingRef.current) break;
@@ -134,17 +252,14 @@ export default function Preview() {
           setTypingProgress(prev => ({ ...prev, [msg.id]: content.length }));
         }
         
-        const remainingTime = Math.max(0, settings.messageInterval - 500);
-        if (remainingTime > 0) {
-          await new Promise(resolve => setTimeout(resolve, remainingTime));
-        }
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
     isPlayingRef.current = false;
     setIsPlaying(false);
     setTypingProgress({});
-  }, [messages, settings, setIsPlaying, typingConfig]);
+  }, [messages, setIsPlaying, typingConfig]);
 
   function getVisibleTextAtTimestamp(seq: MessageTypingSequence, timestamp: number): string {
     let text = '';
@@ -378,8 +493,10 @@ export default function Preview() {
           deviceType: config.deviceType
         };
         
-        setExportStatus('正在录制视频帧（打字动画）...');
+        setExportStatus('正在录制视频帧...');
 
+        const framesPerMessage = Math.round((simpleExportDuration / messages.length) * settings.fps);
+        
         const videoBlob = await exporter.recordVideo(
           previewContainerRef.current!,
           messages,
@@ -388,7 +505,8 @@ export default function Preview() {
           (progress) => {
             setExportProgress(progress);
           },
-          userSettings.theme === 'dark'
+          userSettings.theme === 'dark',
+          framesPerMessage
         );
         
         setExportStatus('正在下载...');
@@ -412,43 +530,6 @@ export default function Preview() {
       setIsExporting(false);
       setTimeout(() => setExportStatus(''), 3000);
     }
-  };
-
-  const handleExportHtml = () => {
-    if (messages.length === 0) {
-      setExportError('请先添加消息');
-      return;
-    }
-
-    const platformConfig = { name: platform.name, styles: platform.styles };
-    const html = generateChatHtml(messages, platformConfig, settings.width, settings.height, project.chatTitle, users);
-
-    const fullHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>聊天预览</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-  </style>
-</head>
-<body style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #e5e5e5;">
-  ${html}
-</body>
-</html>`;
-
-    const blob = new Blob([fullHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chat-${Date.now()}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setExportStatus('HTML 已下载！');
-    setTimeout(() => setExportStatus(''), 3000);
   };
 
   return (
@@ -568,62 +649,6 @@ export default function Preview() {
         </div>
       )}
 
-      {/* 动画设置 */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">打字速度</label>
-            <input
-              type="range"
-              min="20"
-              max="200"
-              value={settings.typingSpeed}
-              onChange={e => updateSettings({ typingSpeed: Number(e.target.value) })}
-              className="w-full dark:bg-gray-700"
-            />
-            <div className="text-sm text-gray-500 dark:text-gray-400 text-center">{settings.typingSpeed}ms/字</div>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">消息间隔</label>
-            <input
-              type="range"
-              min="200"
-              max="2000"
-              value={settings.messageInterval}
-              onChange={e => updateSettings({ messageInterval: Number(e.target.value) })}
-              className="w-full dark:bg-gray-700"
-            />
-            <div className="text-sm text-gray-500 dark:text-gray-400 text-center">{settings.messageInterval}ms</div>
-          </div>
-          {exportType === 'video' && (
-            <>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">帧率 (FPS)</label>
-                <input
-                  type="number"
-                  value={settings.fps}
-                  onChange={e => updateSettings({ fps: Number(e.target.value) })}
-                  min="15"
-                  max="60"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">码率 (kbps)</label>
-                <input
-                  type="number"
-                  value={settings.videoBitrate}
-                  onChange={e => updateSettings({ videoBitrate: Number(e.target.value) })}
-                  min="500"
-                  max="5000"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
       {/* 预览区 */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div className="flex justify-center p-4 bg-gray-50 dark:bg-gray-900">
@@ -649,21 +674,7 @@ export default function Preview() {
 
       {/* 导出控制 */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-        <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
-          <h3 className="text-lg font-semibold dark:text-white">导出</h3>
-          
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600 dark:text-gray-400">导出格式:</label>
-            <select
-              value={exportType}
-              onChange={e => setExportType(e.target.value as 'image' | 'video')}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            >
-              <option value="image">图片 (PNG)</option>
-              <option value="video">视频 (MP4)</option>
-            </select>
-          </div>
-        </div>
+        <h3 className="text-lg font-semibold dark:text-white mb-4">导出</h3>
 
         {exportError && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
@@ -677,28 +688,97 @@ export default function Preview() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleExportImage}
-            disabled={isExporting || messages.length === 0}
-            className="flex-1 min-w-[140px] px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-          >
-            {isExporting ? '导出中...' : '导出图片'}
-          </button>
-          <button
-            onClick={handleExportVideo}
-            disabled={isExporting || messages.length === 0}
-            className="flex-1 min-w-[140px] px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-          >
-            {isExporting ? '导出中...' : '导出视频'}
-          </button>
-          <button
-            onClick={handleExportHtml}
-            disabled={messages.length === 0}
-            className="px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          >
-            导出 HTML
-          </button>
+        {/* 导出图片按钮 */}
+        <button
+          onClick={handleExportImage}
+          disabled={isExporting || messages.length === 0}
+          className="w-full px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm mb-2"
+        >
+          {isExporting ? '导出中...' : '导出图片'}
+        </button>
+
+        {/* 导出视频按钮 */}
+        <button
+          onClick={handleExportVideo}
+          disabled={isExporting || messages.length === 0}
+          className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm mb-4"
+        >
+          {isExporting ? '导出中...' : '导出视频'}
+        </button>
+
+        {/* 视频设置 */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+          <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">视频设置</h4>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">帧率</label>
+              <select
+                value={settings.fps}
+                onChange={e => updateSettings({ fps: Number(e.target.value) })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="15">15fps (省空间)</option>
+                <option value="24">24fps (电影感)</option>
+                <option value="30">30fps (推荐)</option>
+                <option value="45">45fps (超流畅)</option>
+                <option value="60">60fps (电竞级)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">码率</label>
+              <select
+                value={settings.videoBitrate}
+                onChange={e => updateSettings({ videoBitrate: Number(e.target.value) })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="1000">1000k (标清)</option>
+                <option value="2000">2000k (高清)</option>
+                <option value="5000">5000k (超清)</option>
+              </select>
+            </div>
+          </div>
+
+          {typingConfig.enabled && !typingConfig.fastMode && durationRange && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                动画视频时长: <span className="text-blue-600 dark:text-blue-400">{typingConfig.targetDuration}</span> 秒
+              </label>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{durationRange.min}s</span>
+                <input
+                  type="range"
+                  min={durationRange.min}
+                  max={durationRange.max}
+                  step="1"
+                  value={typingConfig.targetDuration}
+                  onChange={e => setTypingConfig(prev => ({ ...prev, targetDuration: Number(e.target.value) }))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{durationRange.max}s</span>
+              </div>
+            </div>
+          )}
+
+          {!typingConfig.enabled && simpleDurationRange && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                视频时长: <span className="text-blue-600 dark:text-blue-400">{simpleExportDuration}</span> 秒
+              </label>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{simpleDurationRange.min}s (最快4x)</span>
+                <input
+                  type="range"
+                  min={simpleDurationRange.min}
+                  max={simpleDurationRange.max}
+                  step="1"
+                  value={simpleExportDuration}
+                  onChange={e => setSimpleExportDuration(Number(e.target.value))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{simpleDurationRange.max}s (最慢0.1x)</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {isExporting && (
@@ -715,7 +795,7 @@ export default function Preview() {
           </div>
         )}
 
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-4 text-center">
           消息数量: {messages.length} 条 | 分辨率: {settings.width}×{settings.height}
         </p>
       </div>
@@ -725,7 +805,23 @@ export default function Preview() {
         onClose={() => setShowTypingSettings(false)}
         config={typingConfig}
         onSave={handleTypingConfigSave}
-        estimatedDuration={estimatedDuration}
+        messages={messages}
+        onOpenDebugPreview={() => {
+          if (messages.length === 0) {
+            alert('没有消息，请先添加对话');
+            return;
+          }
+          import('@/core/typingAnimation/debugPreview').then(({ downloadDebugHtml }) => {
+            downloadDebugHtml({
+              messages: messages,
+              config: { ...typingConfig, enabled: true },
+              width: 375,
+              height: 667,
+            });
+          });
+        }}
+        onExportVideo={handleExportTypingVideo}
+        isExportingVideo={isExportingVideo}
       />
     </div>
   );

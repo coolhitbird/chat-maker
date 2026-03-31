@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { TypingAnimationConfig } from '../types';
 import { DEFAULT_TYPING_CONFIG } from '../config';
+import type { Message } from '@/types';
+import { calculateDurationRange } from '../generators';
 
 interface TypingSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: TypingAnimationConfig;
   onSave: (config: TypingAnimationConfig) => void;
-  estimatedDuration?: number;
+  messages?: Message[];
+  onOpenDebugPreview?: () => void;
+  onExportVideo?: () => void;
+  isExportingVideo?: boolean;
 }
 
 export default function TypingSettingsModal({
@@ -15,7 +20,10 @@ export default function TypingSettingsModal({
   onClose,
   config,
   onSave,
-  estimatedDuration,
+  messages = [],
+  onOpenDebugPreview,
+  onExportVideo,
+  isExportingVideo,
 }: TypingSettingsModalProps) {
   const [localConfig, setLocalConfig] = useState<TypingAnimationConfig>(config);
 
@@ -23,20 +31,32 @@ export default function TypingSettingsModal({
     setLocalConfig(config);
   }, [config]);
 
-  if (!isOpen) return null;
-
-  const handleSave = () => {
-    onSave(localConfig);
-    onClose();
-  };
+  const durationRange = useMemo(() => {
+    if (messages.length === 0) return null;
+    return calculateDurationRange(messages);
+  }, [messages]);
 
   const handleReset = () => {
     setLocalConfig(DEFAULT_TYPING_CONFIG);
+    onSave(DEFAULT_TYPING_CONFIG);
   };
 
   const updateConfig = (updates: Partial<TypingAnimationConfig>) => {
-    setLocalConfig(prev => ({ ...prev, ...updates }));
+    const newConfig = { ...localConfig, ...updates };
+    setLocalConfig(newConfig);
+    onSave(newConfig);
   };
+
+  useEffect(() => {
+    if (durationRange) {
+      const target = Math.max(durationRange.min, Math.min(durationRange.max, durationRange.recommended));
+      if (localConfig.targetDuration !== target) {
+        updateConfig({ targetDuration: target });
+      }
+    }
+  }, [durationRange]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -45,12 +65,20 @@ export default function TypingSettingsModal({
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             打字动画设置
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none"
-          >
-            &times;
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReset}
+              className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              恢复默认
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none"
+            >
+              &times;
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-6">
@@ -73,7 +101,7 @@ export default function TypingSettingsModal({
                 打字速度
               </label>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500">慢</span>
+                <span className="text-xs text-gray-500">快</span>
                 <input
                   type="range"
                   min="30"
@@ -82,7 +110,7 @@ export default function TypingSettingsModal({
                   onChange={(e) => updateConfig({ baseSpeed: Number(e.target.value) })}
                   className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                 />
-                <span className="text-xs text-gray-500">快</span>
+                <span className="text-xs text-gray-500">慢</span>
               </div>
               <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {localConfig.baseSpeed}ms/字
@@ -298,16 +326,61 @@ export default function TypingSettingsModal({
                   快速导出（跳过动画）
                 </label>
               </div>
+
+              {!localConfig.fastMode && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    目标视频时长
+                  </label>
+                  {durationRange && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-3">
+                      <div className="text-xs text-blue-600 dark:text-blue-300">
+                        可选范围：<span className="font-semibold">{durationRange.min}</span> 秒 ~ <span className="font-semibold">{durationRange.max}</span> 秒
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500">短</span>
+                    <input
+                      type="range"
+                      min={durationRange?.min || 5}
+                      max={durationRange?.max || 60}
+                      step="1"
+                      value={localConfig.targetDuration}
+                      onChange={(e) => updateConfig({ targetDuration: Number(e.target.value) })}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                    />
+                    <span className="text-xs text-gray-500">长</span>
+                  </div>
+                  <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    约 <span className="font-semibold text-gray-900 dark:text-white">{localConfig.targetDuration}</span> 秒
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">渲染模式</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                不同模式渲染效果和兼容性不同，可尝试切换找到最适合的配置
-              </p>
 
               <div className="space-y-2">
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <label className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${localConfig.renderMode === 'simple' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                  <input
+                    type="radio"
+                    name="renderMode"
+                    value="simple"
+                    checked={localConfig.renderMode === 'simple'}
+                    onChange={() => updateConfig({ renderMode: 'simple' })}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className={`text-sm font-medium ${localConfig.renderMode === 'simple' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>简洁模式 ⭐</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      从上到下依次显示，支持所有消息类型
+                    </div>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${localConfig.renderMode === 'loop' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                   <input
                     type="radio"
                     name="renderMode"
@@ -317,14 +390,14 @@ export default function TypingSettingsModal({
                     className="mt-1"
                   />
                   <div>
-                    <div className="text-sm font-medium text-gray-700 dark:text-gray-200">循环渲染模式 (推荐)</div>
+                    <div className={`text-sm font-medium ${localConfig.renderMode === 'loop' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>循环渲染模式</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      复用现有视频导出循环结构，兼容性好，支持滚动
+                      从底部向上堆叠，支持滚动
                     </div>
                   </div>
                 </label>
 
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <label className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${localConfig.renderMode === 'content' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                   <input
                     type="radio"
                     name="renderMode"
@@ -334,14 +407,14 @@ export default function TypingSettingsModal({
                     className="mt-1"
                   />
                   <div>
-                    <div className="text-sm font-medium text-gray-700 dark:text-gray-200">内容修改模式</div>
+                    <div className={`text-sm font-medium ${localConfig.renderMode === 'content' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>内容修改模式</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      修改消息内容后通过 Canvas 渲染，需要 Canvas 支持打字参数
+                      修改消息内容后 Canvas 渲染
                     </div>
                   </div>
                 </label>
 
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <label className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${localConfig.renderMode === 'dom' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                   <input
                     type="radio"
                     name="renderMode"
@@ -351,44 +424,61 @@ export default function TypingSettingsModal({
                     className="mt-1"
                   />
                   <div>
-                    <div className="text-sm font-medium text-gray-700 dark:text-gray-200">DOM 动画模式</div>
+                    <div className={`text-sm font-medium ${localConfig.renderMode === 'dom' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>DOM 动画模式</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      基于 CSS 动画的 DOM 渲染，效果最真实但渲染较慢
+                      HTML/CSS 渲染，效果真实但较慢
                     </div>
                   </div>
                 </label>
               </div>
             </div>
 
-            {estimatedDuration !== undefined && (
+            {messages.length > 0 && (
               <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
                 <div className="text-sm text-gray-600 dark:text-gray-300">
-                  预估导出时长：约 <span className="font-semibold text-gray-900 dark:text-white">{estimatedDuration}</span> 秒
+                  {localConfig.fastMode ? (
+                    <>快速模式：约 <span className="font-semibold text-gray-900 dark:text-white">{Math.round(messages.length * 1.5)}</span> 秒</>
+                  ) : durationRange ? (
+                    <>
+                      时长范围：<span className="font-semibold text-gray-900 dark:text-white">{durationRange.min}</span> 秒 ~ <span className="font-semibold text-gray-900 dark:text-white">{durationRange.max}</span> 秒
+                      {localConfig.targetDuration >= durationRange.min && localConfig.targetDuration <= durationRange.max && (
+                        <span className="ml-2">（已选 <span className="font-semibold text-blue-600">{localConfig.targetDuration}</span> 秒）</span>
+                      )}
+                    </>
+                  ) : (
+                    <>消息数量：<span className="font-semibold text-gray-900 dark:text-white">{messages.length}</span> 条</>
+                  )}
                 </div>
-                {localConfig.fastMode && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    开启快速导出可大幅缩短导出时间
-                  </div>
-                )}
+              </div>
+            )}
+
+            {onOpenDebugPreview && (
+              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-800">
+                <div className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">
+                  调试工具
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={onOpenDebugPreview}
+                    className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium"
+                  >
+                    调试预览
+                  </button>
+                  {onExportVideo && (
+                    <button
+                      onClick={onExportVideo}
+                      disabled={isExportingVideo}
+                      className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isExportingVideo ? '导出中...' : '导出视频'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={handleReset}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
-          >
-            恢复默认
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            确定
-          </button>
-        </div>
       </div>
     </div>
   );
