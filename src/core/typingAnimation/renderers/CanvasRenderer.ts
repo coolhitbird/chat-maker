@@ -217,11 +217,11 @@ export function renderTypingFrame(
     const user = users.find(u => u.name === msg.sender);
     const avatar = user?.avatar || msg.avatar;
 
-    let visibleContent = msg.content || '';
+    let visibleContent = '';
     let isTyping = false;
     let currentTypingTime = elapsedTime;
 
-    if (sequence && !config.fastMode) {
+    if (sequence) {
       const result = getVisibleContentAtTime(sequence, currentTypingTime);
       visibleContent = result.text;
       isTyping = result.isTyping;
@@ -263,25 +263,27 @@ export function renderTypingFrame(
     const senderHeight = avatarSize * 0.33;
     const bubbleY = y + senderHeight;
 
-    drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius, isUser, styles);
+    if (visibleContent) {
+      drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius, isUser, styles);
 
-    const textColor = isUser ? styles.bubbleRightColor : styles.bubbleLeftColor;
-    drawTextWithEmoji(
-      ctx,
-      visibleContent,
-      bubbleX + bubblePadding,
-      bubbleY + bubblePadding,
-      bubbleWidth - bubblePadding * 2,
-      fontSize,
-      darkMode ? '#fff' : textColor,
-      lineHeight
-    );
+      const textColor = isUser ? styles.bubbleRightColor : styles.bubbleLeftColor;
+      drawTextWithEmoji(
+        ctx,
+        visibleContent,
+        bubbleX + bubblePadding,
+        bubbleY + bubblePadding,
+        bubbleWidth - bubblePadding * 2,
+        fontSize,
+        darkMode ? '#fff' : textColor,
+        lineHeight
+      );
 
-    if (isTyping && msg.id === currentTypingMessageId && config.cursorEnabled) {
-      const lastLineWidth = textWidth % (bubbleWidth - bubblePadding * 2);
-      const cursorX = bubbleX + bubblePadding + (lastLineWidth > 0 ? lastLineWidth : 0);
-      const cursorY = bubbleY + bubblePadding + Math.floor(textWidth / (bubbleWidth - bubblePadding * 2)) * lineHeight;
-      drawCursor(ctx, cursorX, cursorY, fontSize, config.cursorBlinkRate, elapsedTime);
+      if (isTyping && msg.id === currentTypingMessageId && config.cursorEnabled) {
+        const lastLineWidth = textWidth % (bubbleWidth - bubblePadding * 2);
+        const cursorX = bubbleX + bubblePadding + (lastLineWidth > 0 ? lastLineWidth : 0);
+        const cursorY = bubbleY + bubblePadding + Math.floor(textWidth / (bubbleWidth - bubblePadding * 2)) * lineHeight;
+        drawCursor(ctx, cursorX, cursorY, fontSize, config.cursorBlinkRate, elapsedTime);
+      }
     }
 
     y += Math.max(avatarSize, bubbleHeight + senderHeight) + gap;

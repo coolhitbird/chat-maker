@@ -345,8 +345,6 @@ function renderLayouts(
       continue;
     }
 
-    drawAvatar(ctx, avatarX, adjustedY, layoutConfig.avatarSize, msg.sender);
-
     if (msg.type === 'system') {
       const systemText = msg.system?.text || msg.content || '';
       const systemType = msg.system?.type || 'default';
@@ -385,8 +383,10 @@ function renderLayouts(
       continue;
     }
 
+    drawAvatar(ctx, avatarX, adjustedY, layoutConfig.avatarSize, msg.sender);
+
     const typingState = typingProgress.get(msg.id);
-    const text = typingState?.text || msg.content || '';
+    const text = typingState?.text ?? '';
     const bubbleBg = layout.isUser ? styles.bubbleRightBg : styles.bubbleLeftBg;
     const bubbleColor = layout.isUser ? styles.bubbleRightColor : styles.bubbleLeftColor;
 
@@ -398,7 +398,7 @@ function renderLayouts(
       drawImageMessage(ctx, layout.bubbleX, adjustedY + senderHeight, layout.bubbleWidth, layout.bubbleHeight, msg.image, imageCache, scale);
     } else if (msg.type === 'voice') {
       drawVoiceMessage(ctx, layout.bubbleX, adjustedY + senderHeight, layout.bubbleWidth, layout.bubbleHeight, msg.voice, bubbleBg, bubblePadding, fontSize, lineHeight, darkMode, scale);
-    } else {
+    } else if (text) {
       drawBubble(ctx, layout.bubbleX, adjustedY + senderHeight, layout.bubbleWidth, layout.bubbleHeight, bubbleRadius, bubbleBg);
       drawTextInBubble(ctx, text, layout.bubbleX + bubblePadding, adjustedY + senderHeight + bubblePadding, layout.bubbleWidth - bubblePadding * 2, fontSize, bubbleColor, lineHeight, layout.bubbleHeight - bubblePadding * 2);
 
