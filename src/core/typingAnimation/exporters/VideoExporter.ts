@@ -696,7 +696,6 @@ export class TypingVideoExporter {
 
     // 每帧时间步长 = frameInterval * speedMultiplier
     const timeStep = frameInterval * speedMultiplier;
-    const totalFrames = Math.ceil(totalDuration / timeStep);
     const BATCH_SIZE = 100;
     let frameIndex = 0;
     let startFrameIndex = 0;
@@ -738,16 +737,18 @@ export class TypingVideoExporter {
         frameIndex++;
       }
 
-      if (frameBuffer.length >= BATCH_SIZE || t >= totalDuration) {
-        for (let i = 0; i < frameBuffer.length; i++) {
+      if (frameBuffer.length >= BATCH_SIZE || t + timeStep > totalDuration) {
+        const framesToWrite = frameBuffer.length;
+        for (let i = 0; i < framesToWrite; i++) {
           const filename = `frame${String(startFrameIndex + i).padStart(5, '0')}.png`;
           await ffmpeg.writeFile(filename, frameBuffer[i]);
         }
         frameBuffer.length = 0;
-        startFrameIndex += BATCH_SIZE;
+        startFrameIndex += framesToWrite;
       }
 
-      const progress = 10 + Math.round((frameIndex / totalFrames) * 70);
+      const estimatedTotalFrames = Math.ceil(totalDuration / timeStep);
+      const progress = 10 + Math.round((frameIndex / Math.max(estimatedTotalFrames, frameIndex + 1)) * 70);
       onProgress?.(Math.min(progress, 80));
     }
 

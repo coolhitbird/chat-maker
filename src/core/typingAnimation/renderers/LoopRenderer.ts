@@ -676,16 +676,17 @@ export class LoopTypingRenderer {
         frameIndex++;
       }
 
-      if (frameBuffer.length >= BATCH_SIZE || t >= finalDuration) {
-        for (let i = 0; i < frameBuffer.length; i++) {
+      if (frameBuffer.length >= BATCH_SIZE || t + frameInterval > finalDuration) {
+        const framesToWrite = frameBuffer.length;
+        for (let i = 0; i < framesToWrite; i++) {
           const filename = `frame${String(startFrameIndex + i).padStart(5, '0')}.png`;
           await ffmpeg.writeFile(filename, frameBuffer[i]);
         }
         frameBuffer.length = 0;
-        startFrameIndex += BATCH_SIZE;
+        startFrameIndex += framesToWrite;
       }
 
-      const progress = 10 + Math.round((frameIndex / totalFrames) * 70);
+      const progress = 10 + Math.round((frameIndex / Math.max(totalFrames, frameIndex + 1)) * 70);
       onProgress?.(Math.min(progress, 80));
     }
 
