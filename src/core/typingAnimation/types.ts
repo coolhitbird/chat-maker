@@ -67,6 +67,7 @@ export interface ExportConfig {
     background?: string;
     headerBg?: string;
     headerColor?: string;
+    title?: string;
   };
 }
 

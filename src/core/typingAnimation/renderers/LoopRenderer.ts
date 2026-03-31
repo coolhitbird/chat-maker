@@ -44,6 +44,14 @@ function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, w: numb
   ctx.fill();
 }
 
+function drawSenderName(ctx: CanvasRenderingContext2D, x: number, y: number, name: string, align: CanvasTextAlign, fontSize: number) {
+  ctx.fillStyle = '#888888';
+  ctx.font = `${fontSize * 0.7}px "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(name, x, y);
+}
+
 function drawRedPacket(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, rp: Message['redPacket'], isOpened: boolean, PAD: number, scale: number = 1) {
   const iconSize = Math.round(48 * scale);
   const bodyH = h - Math.round(32 * scale);
@@ -376,6 +384,8 @@ function renderLayouts(
 
     drawAvatar(ctx, avatarX, adjustedY, layoutConfig.avatarSize, msg.sender);
 
+    drawSenderName(ctx, layout.senderNameX, adjustedY + senderHeight, msg.sender, layout.isUser ? 'right' : 'left', fontSize);
+
     const typingState = typingProgress.get(msg.id);
     const text = typingState?.text ?? '';
     const bubbleBg = layout.isUser ? styles.bubbleRightBg : styles.bubbleLeftBg;
@@ -437,7 +447,7 @@ export class LoopTypingRenderer {
     messages: Message[],
     config: TypingAnimationConfig,
     exportConfig: ExportConfig,
-    _users: UserProfile[] = [],
+    users: UserProfile[] = [],
     darkMode: boolean = false,
     onProgress?: (progress: number) => void
   ): Promise<Blob> {
@@ -463,6 +473,8 @@ export class LoopTypingRenderer {
     const bubblePadding = Math.round((exportConfig.styles?.bubblePadding || 12) * scale);
     const bubbleRadius = Math.round((exportConfig.styles?.bubbleRadius || 18) * scale);
     const headerHeight = Math.round(avatarSize + 8 * scale);
+    
+    const title = exportConfig.styles?.title || users[0]?.name || 'Chat';
 
     const layoutConfig: LayoutConfig = {
       ...DEFAULT_LAYOUT_CONFIG,
@@ -527,7 +539,10 @@ export class LoopTypingRenderer {
     const finalDuration = Math.max(scaledDuration, 5000);
 
     const totalFrames = Math.ceil(finalDuration / frameInterval);
+    const BATCH_SIZE = 100;
     let frameIndex = 0;
+    let startFrameIndex = 0;
+    const frameBuffer: Uint8Array[] = [];
 
     const visibleMessages: Message[] = [];
     const messageVisibleAt: Map<string, number> = new Map();
@@ -624,7 +639,7 @@ export class LoopTypingRenderer {
       ctx.font = `bold ${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Chat', width / 2, statusBarHeight + headerHeight / 2);
+      ctx.fillText(title, width / 2, statusBarHeight + headerHeight / 2);
       ctx.textAlign = 'left';
 
       const typingProgress = new Map<string, { text: string; isTyping: boolean }>();
@@ -655,11 +670,19 @@ export class LoopTypingRenderer {
       });
 
       if (blob) {
-        const filename = `frame${String(frameIndex).padStart(5, '0')}.png`;
         const arrayBuffer = await blob.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
-        await ffmpeg.writeFile(filename, uint8Array);
+        frameBuffer.push(uint8Array);
         frameIndex++;
+      }
+
+      if (frameBuffer.length >= BATCH_SIZE || t >= finalDuration) {
+        for (let i = 0; i < frameBuffer.length; i++) {
+          const filename = `frame${String(startFrameIndex + i).padStart(5, '0')}.png`;
+          await ffmpeg.writeFile(filename, frameBuffer[i]);
+        }
+        frameBuffer.length = 0;
+        startFrameIndex += BATCH_SIZE;
       }
 
       const progress = 10 + Math.round((frameIndex / totalFrames) * 70);

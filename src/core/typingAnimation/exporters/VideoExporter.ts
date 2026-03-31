@@ -616,7 +616,7 @@ export class TypingVideoExporter {
     messages: Message[],
     config: TypingAnimationConfig,
     exportConfig: ExportConfig,
-    _users: UserProfile[] = [],
+    users: UserProfile[] = [],
     darkMode: boolean = false,
     onProgress?: (progress: number) => void
   ): Promise<Blob> {
@@ -628,6 +628,8 @@ export class TypingVideoExporter {
     const fps = exportConfig.fps || 30;
     const frameInterval = 1000 / fps;
     const messageInterval = 1500;
+
+    const title = exportConfig.styles?.title || users[0]?.name || 'Chat';
 
     onProgress?.(5);
 
@@ -695,7 +697,10 @@ export class TypingVideoExporter {
     // 每帧时间步长 = frameInterval * speedMultiplier
     const timeStep = frameInterval * speedMultiplier;
     const totalFrames = Math.ceil(totalDuration / timeStep);
+    const BATCH_SIZE = 100;
     let frameIndex = 0;
+    let startFrameIndex = 0;
+    const frameBuffer: Uint8Array[] = [];
 
     for (let t = 0; t <= totalDuration; t += timeStep) {
       // 当前可见的消息（只显示当前正在打字的消息）
@@ -720,18 +725,26 @@ export class TypingVideoExporter {
       const { layouts, totalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, undefined, scale);
       const scrollOffset = calculateScrollOffset(layouts, totalHeight, layoutConfig, true);
 
-      renderFrame(ctx, layoutConfig, layouts, typingProgress, scrollOffset, darkMode, imageCache, scale, 'Chat');
+      renderFrame(ctx, layoutConfig, layouts, typingProgress, scrollOffset, darkMode, imageCache, scale, title);
 
       const blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob(resolve, 'image/png');
       });
 
       if (blob) {
-        const filename = `frame${String(frameIndex).padStart(5, '0')}.png`;
         const arrayBuffer = await blob.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
-        await ffmpeg.writeFile(filename, uint8Array);
+        frameBuffer.push(uint8Array);
         frameIndex++;
+      }
+
+      if (frameBuffer.length >= BATCH_SIZE || t >= totalDuration) {
+        for (let i = 0; i < frameBuffer.length; i++) {
+          const filename = `frame${String(startFrameIndex + i).padStart(5, '0')}.png`;
+          await ffmpeg.writeFile(filename, frameBuffer[i]);
+        }
+        frameBuffer.length = 0;
+        startFrameIndex += BATCH_SIZE;
       }
 
       const progress = 10 + Math.round((frameIndex / totalFrames) * 70);
