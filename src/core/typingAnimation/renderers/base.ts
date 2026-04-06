@@ -1,6 +1,7 @@
 import type { Message, UserProfile } from '@/types';
 import type { TypingAnimationConfig, ExportConfig } from '../types';
 import { DEFAULT_EXPORT_STYLES } from '../types';
+import { getEmojiUnicode } from '@/utils/emoji';
 
 export interface TypingRenderer {
   init(): Promise<void>;
@@ -107,7 +108,8 @@ export function drawTypingText(
     if (match.index > lastIndex) {
       parts.push({ type: 'text', value: text.substring(lastIndex, match.index) });
     }
-    parts.push({ type: 'emoji', value: match[0] });
+    const unicode = getEmojiUnicode(match[0]);
+    parts.push({ type: 'emoji', value: unicode || match[0] });
     lastIndex = match.index + match[0].length;
   }
 
@@ -147,12 +149,12 @@ export function drawTypingText(
         totalHeight += lineHeight;
       }
 
-      ctx.fillStyle = '#888';
       ctx.font = `${fontSize * 1.2}px sans-serif`;
       ctx.fillText(part.value, currentX, currentY - 2);
       currentX += emojiWidth;
       lineWidth += emojiWidth;
       maxLineWidth = Math.max(maxLineWidth, lineWidth);
+      ctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
       ctx.fillStyle = color;
     }
   }

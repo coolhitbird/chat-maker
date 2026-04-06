@@ -106,22 +106,31 @@ export function calculateMessageHeight(
   switch (msg.type) {
     case 'system':
       return { rowHeight: Math.round(28 * scale), bubbleWidth: 0, bubbleHeight: 0 };
-      
+
+    case 'timestamp':
+      return { rowHeight: Math.round(28 * scale), bubbleWidth: 0, bubbleHeight: 0 };
+
     case 'redpacket':
       bubbleWidth = Math.round(180 * scale);
       bubbleHeight = Math.round(102 * scale);
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
-      
+
     case 'transfer':
       bubbleWidth = Math.round(180 * scale);
       bubbleHeight = Math.round(120 * scale);
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
-      
+
     case 'image':
       bubbleWidth = Math.round(180 * scale);
       bubbleHeight = Math.round(180 * scale);
+      rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
+      return { rowHeight, bubbleWidth, bubbleHeight };
+
+    case 'file':
+      bubbleWidth = Math.round(220 * scale);
+      bubbleHeight = Math.round(64 * scale);
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
       
@@ -196,8 +205,12 @@ export function calculateAllLayouts(
       isCurrentTyping: i === currentTypingIndex,
     });
     
-    y += rowHeight + gap;
-    totalHeight += rowHeight + gap;
+    y += rowHeight;
+    totalHeight += rowHeight;
+    if (i < messages.length - 1) {
+      y += gap;
+      totalHeight += gap;
+    }
   }
   
   return { layouts, totalHeight };

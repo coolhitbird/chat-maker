@@ -8,10 +8,10 @@ import {
   LayoutConfig,
   DEFAULT_LAYOUT_CONFIG,
   calculateAllLayouts,
-  calculateScrollOffset,
   wrapText,
   MessageLayout
 } from '../renderers/layoutUtils';
+import { wechatEmojis } from '@/utils/emoji';
 
 const AVATAR_COLORS = [
   '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
@@ -29,7 +29,21 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-function drawAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, name: string) {
+function drawAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, name: string, avatarUrl?: string, imageCache?: Map<string, HTMLImageElement>) {
+  // 优先使用自定义头像
+  if (avatarUrl && imageCache) {
+    const cached = imageCache.get(`avatar:${name}`);
+    if (cached?.complete && cached.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(cached, x, y, size, size);
+      ctx.restore();
+      return;
+    }
+  }
+  // 降级：彩色字母头像
   ctx.beginPath();
   ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
   ctx.fillStyle = getAvatarColor(name);
@@ -66,6 +80,10 @@ function drawSenderName(ctx: CanvasRenderingContext2D, x: number, y: number, nam
   ctx.fillText(name, x, y);
 }
 
+// emoji map for canvas rendering
+const EMOJI_MAP = new Map(wechatEmojis.map(e => [e.key, e]));
+
+/** 在气泡内绘制文字，支持 emoji，垂直居中对齐 */
 function drawTextInBubble(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -75,18 +93,166 @@ function drawTextInBubble(
   fontSize: number,
   color: string,
   lineHeight: number,
-  bubbleHeight: number
 ) {
   ctx.fillStyle = color;
   ctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
   ctx.textAlign = 'left';
-  const lines = wrapText(ctx, text, maxWidth);
-  const totalTextHeight = lines.length * lineHeight;
-  const verticalPadding = Math.max(0, (bubbleHeight - totalTextHeight) / 2);
-  ctx.textBaseline = 'top';
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], x, y + verticalPadding + i * lineHeight);
+  ctx.textBaseline = 'middle';
+
+  // 解析 emoji 和普通文字
+  const emojiRegex = /\[[^\]]{1,10}\]/g;
+  const parts: Array<{ type: 'text' | 'emoji'; value: string }> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = emojiRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', value: text.substring(lastIndex, match.index) });
+    }
+    const emoji = EMOJI_MAP.get(match[0]);
+    parts.push({ type: 'emoji', value: emoji?.unicode || match[0] });
+    lastIndex = match.index + match[0].length;
   }
+  if (lastIndex < text.length) {
+    parts.push({ type: 'text', value: text.substring(lastIndex) });
+  }
+
+  // 先分行，再逐行居中绘制
+  const lines: Array<Array<{ type: 'text' | 'emoji'; value: string }>> = [];
+  let currentLine: Array<{ type: 'text' | 'emoji'; value: string }> = [];
+  let lineWidth = 0;
+
+  const pushLine = () => {
+    if (currentLine.length > 0) lines.push(currentLine);
+    currentLine = [];
+    lineWidth = 0;
+  };
+
+  for (const part of parts) {
+    if (part.type === 'emoji') {
+      const emojiW = fontSize * 1.2;
+      if (lineWidth + emojiW > maxWidth && lineWidth > 0) pushLine();
+      currentLine.push(part);
+      lineWidth += emojiW;
+    } else {
+      for (const char of part.value) {
+        const charW = ctx.measureText(char).width;
+        if (lineWidth + charW > maxWidth && lineWidth > 0) pushLine();
+        currentLine.push({ type: 'text', value: char });
+        lineWidth += charW;
+      }
+    }
+  }
+  if (currentLine.length > 0) lines.push(currentLine);
+
+  // 每行垂直居中：行的中心点 = y + (i + 0.5) * lineHeight
+  for (let i = 0; i < lines.length; i++) {
+    const lineCenterY = y + (i + 0.5) * lineHeight;
+    let curX = x;
+    for (const frag of lines[i]) {
+      if (frag.type === 'emoji') {
+        ctx.font = `${fontSize * 1.2}px sans-serif`;
+        ctx.fillText(frag.value, curX, lineCenterY);
+        ctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+        ctx.fillStyle = color;
+        curX += fontSize * 1.2;
+      } else {
+        ctx.fillText(frag.value, curX, lineCenterY);
+        curX += ctx.measureText(frag.value).width;
+      }
+    }
+  }
+}
+
+/** 绘制文件消息气泡 */
+function drawFile(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, file: Message['file'], PAD: number, scale: number = 1) {
+  const r = Math.min(Math.round(10 * scale), w / 2, h / 2);
+  // 外框：浅灰底
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+  ctx.strokeStyle = '#E0E0E0'; ctx.lineWidth = 1; ctx.stroke();
+
+  const iconSize = Math.round(36 * scale);
+  const iconX = x + PAD;
+  const iconY = y + (h - iconSize) / 2;
+
+  // 文件图标颜色
+  const ext = (file?.type || '').toUpperCase();
+  const iconColor = ext === 'PDF' ? '#E53935' : ext === 'DOCX' || ext === 'DOC' ? '#1565C0' : ext === 'XLSX' || ext === 'XLS' ? '#2E7D32' : '#757575';
+
+  ctx.fillStyle = iconColor;
+  ctx.beginPath();
+  ctx.roundRect(iconX, iconY, iconSize, iconSize, Math.round(4 * scale));
+  ctx.fill();
+
+  // 文件类型标签
+  const labelFontSize = Math.round(9 * scale);
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${labelFontSize}px "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ext.slice(0, 4), iconX + iconSize / 2, iconY + iconSize / 2);
+
+  // 文件名
+  const textX = iconX + iconSize + Math.round(10 * scale);
+  const nameFontSize = Math.round(13 * scale);
+  const sizeFontSize = Math.round(11 * scale);
+  const maxTextW = w - (textX - x) - PAD;
+
+  ctx.fillStyle = '#1A1A1A';
+  ctx.font = `${nameFontSize}px "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  let name = file?.name || '文件';
+  while (name.length > 1 && ctx.measureText(name).width > maxTextW) name = name.slice(0, -1);
+  ctx.fillText(name, textX, iconY + Math.round(4 * scale));
+
+  // 文件大小
+  ctx.fillStyle = '#888';
+  ctx.font = `${sizeFontSize}px "Microsoft YaHei", sans-serif`;
+  ctx.fillText(file?.size || '', textX, iconY + nameFontSize + Math.round(8 * scale));
+}
+
+/** 在气泡内顶部绘制引用块 */
+function drawQuote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, quote: Message['quote'], fontSize: number, scale: number = 1): number {
+  if (!quote) return 0;
+  const lineH = Math.round(fontSize * 1.3);
+  const blockH = lineH * 2 + Math.round(8 * scale);
+  const barW = Math.round(3 * scale);
+  const pad = Math.round(6 * scale);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, blockH, Math.round(4 * scale));
+  ctx.fill();
+
+  ctx.fillStyle = '#C9C9C9';
+  ctx.fillRect(x, y, barW, blockH);
+
+  const textX = x + barW + pad;
+  const maxW = w - barW - pad * 2;
+
+  ctx.fillStyle = '#888';
+  ctx.font = `bold ${Math.round(fontSize * 0.78)}px "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(quote.sender, textX, y + Math.round(4 * scale));
+
+  ctx.font = `${Math.round(fontSize * 0.78)}px "Microsoft YaHei", sans-serif`;
+  let summary = quote.content;
+  while (summary.length > 1 && ctx.measureText(summary).width > maxW) summary = summary.slice(0, -1);
+  ctx.fillText(summary, textX, y + Math.round(4 * scale) + lineH);
+
+  return blockH + Math.round(4 * scale);
 }
 
 function drawRedPacket(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, rp: Message['redPacket'], isOpened: boolean, PAD: number, scale: number = 1) {
@@ -370,30 +536,35 @@ function calculateMessageTimings(
     const appearTime = currentTime;
 
     if (msg.type === 'system') {
-      const duration = 800;
+      // 系统消息：固定显示时长，除以 speedMultiplier 得到实际帧时间
+      const duration = 800 / speedMultiplier;
       timings.push({
         messageId: msg.id,
         appearTime,
         typingStartTime: appearTime,
-        typingEndTime: appearTime + 200,
+        typingEndTime: appearTime + 200 / speedMultiplier,
         endTime: appearTime + duration,
       });
       currentTime = appearTime + duration;
-    } else if (msg.type === 'voice') {
-      const typingDuration = 100;
+    } else if (msg.type === 'voice' || msg.type === 'redpacket' || msg.type === 'transfer' || msg.type === 'image' || msg.type === 'file') {
+      // 特殊消息：固定时长
+      const duration = 600 / speedMultiplier;
       timings.push({
         messageId: msg.id,
         appearTime,
         typingStartTime: appearTime,
-        typingEndTime: appearTime + typingDuration,
-        endTime: appearTime + typingDuration,
+        typingEndTime: appearTime + duration,
+        endTime: appearTime + duration + messageInterval / speedMultiplier,
       });
-      currentTime = appearTime + typingDuration;
+      currentTime = appearTime + duration + messageInterval / speedMultiplier;
     } else {
       const sequence = sequences.get(msg.id);
-      const typingDuration = sequence ? sequence.totalDuration : (config.fastMode ? 100 : config.baseSpeed * (msg.content?.length || 10));
+      // 序列总时长除以 speedMultiplier = 实际帧时间
+      const typingDuration = sequence
+        ? sequence.totalDuration / speedMultiplier
+        : (config.fastMode ? 100 : config.baseSpeed * (msg.content?.length || 10)) / speedMultiplier;
       const typingEndTime = appearTime + typingDuration;
-      const endTime = typingEndTime + messageInterval;
+      const endTime = typingEndTime + messageInterval / speedMultiplier;
 
       timings.push({
         messageId: msg.id,
@@ -412,21 +583,16 @@ function calculateMessageTimings(
 
 function getTypingProgressAtTime(
   msg: Message,
+  // elapsedTime 是相对于消息出现时刻的已过时间（原始 ms，未乘 speedMultiplier）
   elapsedTime: number,
-  timing: MessageTiming,
   sequences: Map<string, MessageTypingSequence>,
-  _fastMode: boolean
+  speedMultiplier: number
 ): { text: string; isTyping: boolean } {
   if (msg.type === 'system') {
     return { text: msg.content || '', isTyping: false };
   }
 
-  // 消息还未出现
-  if (elapsedTime < timing.typingStartTime) {
-    return { text: '', isTyping: false };
-  }
-
-  // 语音消息（不管有没有文字）：直接显示完整内容，不打字动画
+  // 语音消息：直接显示完整内容，不打字动画
   if (msg.type === 'voice') {
     return { text: msg.voice?.text || '', isTyping: false };
   }
@@ -436,11 +602,12 @@ function getTypingProgressAtTime(
   }
 
   const sequence = sequences.get(msg.id)!;
-  const typingElapsed = elapsedTime - timing.typingStartTime;
+  // 将实际流逝时间映射到序列时间轴（乘以 speedMultiplier 加速）
+  const sequenceTime = elapsedTime * speedMultiplier;
   let text = '';
 
   for (const event of sequence.events) {
-    if (event.timestamp > typingElapsed) break;
+    if (event.timestamp > sequenceTime) break;
 
     switch (event.type) {
       case 'char':
@@ -456,7 +623,7 @@ function getTypingProgressAtTime(
     }
   }
 
-  const isTyping = typingElapsed < sequence.totalDuration;
+  const isTyping = sequenceTime < sequence.totalDuration;
   return { text, isTyping };
 }
 
@@ -469,7 +636,8 @@ function renderFrame(
   darkMode: boolean,
   imageCache: Map<string, HTMLImageElement>,
   scale: number,
-  title: string = 'Chat'
+  title: string = 'Chat',
+  userAvatarMap: Map<string, string> = new Map()
 ): void {
   const styles = DEFAULT_EXPORT_STYLES;
   const { width, height, headerHeight, statusBarHeight, fontSize, bubblePadding, bubbleRadius, contentPadding, gap } = layoutConfig;
@@ -559,7 +727,7 @@ function renderFrame(
       continue;
     }
 
-    drawAvatar(ctx, avatarX, adjustedY, layoutConfig.avatarSize, msg.sender);
+    drawAvatar(ctx, avatarX, adjustedY, layoutConfig.avatarSize, msg.sender, userAvatarMap.get(msg.sender), imageCache);
 
     drawSenderName(ctx, senderNameX, adjustedY + senderHeight, msg.sender, isUser ? 'right' : 'left', fontSize);
 
@@ -579,9 +747,12 @@ function renderFrame(
       drawVoice(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, msg.voice, bubbleBg, bubblePadding, fontSize, lineHeight, scale, darkMode);
     } else if (msg.type === 'image') {
       drawImage(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, msg.image, imageCache, scale);
+    } else if (msg.type === 'file') {
+      drawFile(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, msg.file, bubblePadding, scale);
     } else if (text) {
       drawBubble(ctx, actualBubbleX, actualBubbleY, layout.bubbleWidth, layout.bubbleHeight, bubbleRadius, bubbleBg);
-      drawTextInBubble(ctx, text, actualBubbleX + bubblePadding, actualBubbleY + bubblePadding, layout.bubbleWidth - bubblePadding * 2, fontSize, bubbleColor, lineHeight, layout.bubbleHeight - bubblePadding * 2);
+      const quoteH = drawQuote(ctx, actualBubbleX + bubblePadding, actualBubbleY + bubblePadding, layout.bubbleWidth - bubblePadding * 2, msg.quote, fontSize, scale);
+      drawTextInBubble(ctx, text, actualBubbleX + bubblePadding, actualBubbleY + bubblePadding + quoteH, layout.bubbleWidth - bubblePadding * 2, fontSize, bubbleColor, lineHeight);
     }
   }
 }
@@ -643,6 +814,21 @@ export class TypingVideoExporter {
     }
 
     const imageCache = new Map<string, HTMLImageElement>();
+    // 预加载用户自定义头像
+    const userAvatarMap = new Map<string, string>();
+    for (const user of users) {
+      if (user.avatar) {
+        userAvatarMap.set(user.name, user.avatar);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = user.avatar;
+        imageCache.set(`avatar:${user.name}`, img);
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        });
+      }
+    }
     const imageUrls = messages
       .filter(m => m.type === 'image' && m.image?.url)
       .map(m => m.image!.url!);
@@ -694,48 +880,52 @@ export class TypingVideoExporter {
     }
     totalDuration += 1000;
 
-    // 每帧时间步长 = frameInterval * speedMultiplier
-    const timeStep = frameInterval * speedMultiplier;
+    const visibleContentHeight = layoutConfig.height - layoutConfig.headerHeight - layoutConfig.statusBarHeight - layoutConfig.contentPadding * 2;
+
+    // 每帧推进的实际时间（ms），不乘 speedMultiplier，保持帧率稳定
+    const timeStep = frameInterval;
     const BATCH_SIZE = 100;
     let frameIndex = 0;
     let startFrameIndex = 0;
     const frameBuffer: Uint8Array[] = [];
 
     for (let t = 0; t <= totalDuration; t += timeStep) {
-      // 当前可见的消息（只显示当前正在打字的消息）
+      // 当前可见的消息及打字进度
       const visibleMessages: Message[] = [];
       const typingProgress = new Map<string, { text: string; isTyping: boolean }>();
-      
+      // 同时维护"完整内容"进度，用于计算滚动高度
+      const fullProgress = new Map<string, { text: string; isTyping: boolean }>();
+
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
         const timing = timings[i];
-        
-        // 只显示当前帧时间之前出现的消息
-        if (t < timing.appearTime) break;
-        
+        if (t < timing.appearTime) continue;
         visibleMessages.push(msg);
-        
-        // 计算打字进度
-        const elapsedTime = (t - timing.appearTime) * speedMultiplier;
-        const progress = getTypingProgressAtTime(msg, elapsedTime, timing, sequences, config.fastMode);
-        typingProgress.set(msg.id, progress);
+        const elapsedTime = t - timing.appearTime;
+        typingProgress.set(msg.id, getTypingProgressAtTime(msg, elapsedTime, sequences, speedMultiplier));
+        // 满屏滚动用完整内容高度
+        fullProgress.set(msg.id, { text: msg.content || '', isTyping: false });
       }
 
-      const { layouts, totalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, undefined, scale);
-      const scrollOffset = calculateScrollOffset(layouts, totalHeight, layoutConfig, true);
+      // 一次 calculateAllLayouts 同时得到布局和滚动量
+      const { layouts, totalHeight: currentTotalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, undefined, scale);
+      // 满屏后才开始滚动：用完整内容高度判断，避免打字中途气泡高度变化导致抖动
+      const { totalHeight: fullTotalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, fullProgress, undefined, scale);
+      const scrollOffset = Math.max(0, fullTotalHeight - visibleContentHeight);
+      void currentTotalHeight;
 
-      renderFrame(ctx, layoutConfig, layouts, typingProgress, scrollOffset, darkMode, imageCache, scale, title);
+      renderFrame(ctx, layoutConfig, layouts, typingProgress, scrollOffset, darkMode, imageCache, scale, title, userAvatarMap);
 
-      const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, 'image/png');
-      });
-
-      if (blob) {
-        const arrayBuffer = await blob.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        frameBuffer.push(uint8Array);
-        frameIndex++;
+      // 用同步的 toDataURL 替代异步 toBlob，大幅提升速度
+      const dataUrl = canvas.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
+      const binaryStr = atob(base64);
+      const uint8Array = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        uint8Array[i] = binaryStr.charCodeAt(i);
       }
+      frameBuffer.push(uint8Array);
+      frameIndex++;
 
       if (frameBuffer.length >= BATCH_SIZE || t + timeStep > totalDuration) {
         const framesToWrite = frameBuffer.length;

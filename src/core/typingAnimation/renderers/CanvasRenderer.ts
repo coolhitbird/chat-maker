@@ -140,14 +140,13 @@ function drawTextWithEmoji(
         totalHeight += lineHeight;
       }
 
-      ctx.fillStyle = '#888';
       ctx.font = `${fontSize * 1.2}px sans-serif`;
       ctx.fillText(part.value, currentX, currentY - 2);
       currentX += emojiWidth;
       lineWidth += emojiWidth;
       maxLineWidth = Math.max(maxLineWidth, lineWidth);
-      ctx.fillStyle = color;
       ctx.font = `${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+      ctx.fillStyle = color;
     }
   }
 
