@@ -78,11 +78,11 @@ export type DeviceTemplate = MobileTemplate | DesktopTemplate;
 export const mobileTemplate: MobileTemplate = {
   type: 'mobile',
   baseStyle: {
-    fontSize: 15,
-    bubbleRadius: 10,
-    avatarSize: 42,
+    fontSize: 17,        // 微信标准 16-17pt
+    bubbleRadius: 18,    // 大圆角 18-20px
+    avatarSize: 48,      // 微信头像 48px
     messageGap: 10,
-    bubblePadding: 8,
+    bubblePadding: 10,   // 上下10px（左右在 platformFactory 里单独处理）
   },
   config: {
     deviceType: 'mobile',
@@ -97,8 +97,8 @@ export const desktopTemplate: DesktopTemplate = {
   type: 'desktop',
   baseStyle: {
     fontSize: 14,
-    bubbleRadius: 6,
-    avatarSize: 36,
+    bubbleRadius: 10,
+    avatarSize: 40,
     messageGap: 8,
     bubblePadding: 10,
   },

@@ -1,4 +1,4 @@
-import type { Message, UserProfile, SystemData } from '@/types';
+import type { Message, UserProfile, SystemData, UserRole } from '@/types';
 import { generateAvatar } from '@/utils/avatar';
 
 interface ParsedLine {
@@ -184,7 +184,7 @@ export function parseConversation(text: string, users: UserProfile[]): ParseResu
   }
 
   // 角色分配：第一个发送者为 'user'（当事人，右侧），其他为 'assistant'（左侧）
-  const roleAssignment = new Map<string, 'user' | 'assistant'>();
+  const roleAssignment = new Map<string, UserRole>();
   
   // 已有用户保留原角色
   users.forEach((user) => {

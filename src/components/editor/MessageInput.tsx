@@ -6,17 +6,31 @@ import TransferEditor from './TransferEditor';
 import ImageEditor from './ImageEditor';
 import VoiceEditor from './VoiceEditor';
 import SystemEditor from './SystemEditor';
+import FileEditor from './FileEditor';
+import type { Message, QuoteData } from '@/types';
 
-export default function MessageInput() {
+interface MessageInputProps {
+  quoteMessage?: Message | null;
+  onClearQuote?: () => void;
+}
+
+export default function MessageInput({ quoteMessage, onClearQuote }: MessageInputProps) {
   const { project, addMessage } = useChatStore();
   const [sender, setSender] = useState(project.users[0]?.name || '');
   const [content, setContent] = useState('');
+
+  // 项目切换时同步 sender 到第一个用户
+  useEffect(() => {
+    if (project.users[0]) setSender(project.users[0].name);
+  }, [project.id]);
+
   const [showEmoji, setShowEmoji] = useState(false);
   const [showRedPacket, setShowRedPacket] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
   const [showSystem, setShowSystem] = useState(false);
+  const [showFile, setShowFile] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,6 +50,24 @@ export default function MessageInput() {
     const user = project.users.find(u => u.name === sender);
     if (!user) return;
 
+    // 构建引用数据
+    let quoteData: QuoteData | undefined;
+    if (quoteMessage) {
+      quoteData = {
+        messageId: quoteMessage.id,
+        sender: quoteMessage.sender,
+        content: quoteMessage.content,
+        type: quoteMessage.type,
+        file: quoteMessage.file,
+        image: quoteMessage.image,
+        voice: quoteMessage.voice,
+        transfer: quoteMessage.transfer,
+        redPacket: quoteMessage.redPacket,
+        timestampData: quoteMessage.timestampData,
+        system: quoteMessage.system,
+      };
+    }
+
     addMessage({
       role: user.role,
       sender: user.name,
@@ -43,9 +75,11 @@ export default function MessageInput() {
       content: content.trim(),
       type: 'text',
       timestamp: Date.now(),
+      quote: quoteData,
     });
 
     setContent('');
+    onClearQuote?.();
   };
 
   const handleEmojiSelect = (emoji: string) => {
@@ -68,6 +102,25 @@ export default function MessageInput() {
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">消息内容</label>
+        {quoteMessage && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg border-l-4 border-blue-400">
+            <div className="flex-1 min-w-0">
+              <span className="text-xs text-gray-500 dark:text-gray-400">引用 {quoteMessage.sender}：</span>
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                {quoteMessage.content.length > 40 ? quoteMessage.content.slice(0, 40) + '…' : quoteMessage.content}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onClearQuote}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
         <div className="relative" ref={pickerRef}>
           <textarea
             value={content}
@@ -137,6 +190,13 @@ export default function MessageInput() {
         >
           系统
         </button>
+        <button
+          type="button"
+          onClick={() => setShowFile(true)}
+          className="px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors"
+        >
+          文件
+        </button>
       </div>
       
       <RedPacketEditor 
@@ -162,6 +222,11 @@ export default function MessageInput() {
       <SystemEditor 
         isOpen={showSystem} 
         onClose={() => setShowSystem(false)} 
+      />
+      
+      <FileEditor
+        isOpen={showFile}
+        onClose={() => setShowFile(false)}
       />
     </form>
   );

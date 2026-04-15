@@ -1,6 +1,6 @@
 // 消息类型
 export type MessageType = 'text' | 'redpacket' | 'transfer' | 'voice' | 'image' | 'timestamp' | 'system' | 'file';
-export type UserRole = 'user' | 'assistant';
+export type UserRole = 'user' | 'assistant' | 'system';
 export type ChatType = 'private' | 'group'; // 私聊 / 群聊
 export type VideoRatio = '9:16' | '16:9' | '1:1';
 export type EmojiSet = 'native' | 'wechat' | 'qq';
@@ -39,7 +39,7 @@ export interface TimestampData {
 
 export interface SystemData {
   text: string; // 系统消息文本，如 "XXX 撤回了一条消息"
-  type?: 'info' | 'warning' | 'notification' | 'recall' | 'pat' | 'addFriend' | 'invite'; // 消息类型
+  type?: 'info' | 'warning' | 'notification' | 'recall' | 'pat' | 'addFriend' | 'invite' | 'time'; // 消息类型
 }
 
 export interface FileData {
@@ -47,6 +47,20 @@ export interface FileData {
   size: string; // 文件大小，如 "2.5 MB"
   type?: string; // 文件类型，如 "PDF"、"DOCX"
   url?: string; // 文件URL（可选）
+}
+
+export interface QuoteData {
+  messageId: string;  // 被引用消息的 id
+  sender: string;     // 被引用消息的发送者
+  content: string;    // 被引用消息的内容摘要（截断显示）
+  type: MessageType;  // 被引用消息的类型
+  file?: FileData;
+  image?: ImageData;
+  voice?: VoiceData;
+  transfer?: TransferData;
+  redPacket?: RedPacketData;
+  timestampData?: TimestampData;
+  system?: SystemData;
 }
 
 export interface Message {
@@ -65,6 +79,7 @@ export interface Message {
   timestampData?: TimestampData;
   system?: SystemData;
   file?: FileData;
+  quote?: QuoteData;  // 引用/回复消息
   // 打字动画支持
   typingCharCount?: number; // 当前显示到第几个字符（undefined 或 >= content.length 表示完整显示）
 }
@@ -152,6 +167,8 @@ export interface StoredProject {
   createdAt: number;
   updatedAt: number;
   thumbnail?: string; // 缩略图（base64）
+  filePath?: string; // 关联的本地文件路径（如果有）
+  fileHandleId?: string; // File System Access API 句柄 ID（用于持久化）
 }
 
 export interface ProjectMetadata {
@@ -180,7 +197,8 @@ export interface ParseOptions {
 export interface WechatEmoji {
   key: string;
   name: string;
-  url: string;
+  unicode?: string;
+  url?: string;
 }
 
 export interface ChatState {
@@ -195,6 +213,7 @@ export interface ChatState {
   previewRef: HTMLDivElement | null;
   ffmpegLoaded: boolean;
   exportingVideoVisibleCount: number;
+  isLoading: boolean;
   createProject: () => void;
   loadProject: (id: string) => void;
   deleteProject: (id: string) => void;
@@ -229,4 +248,10 @@ export interface ChatState {
   exportProject: () => { version: string; exportedAt: string; project: Omit<StoredProject, 'id'> };
   importProject: (data: { version?: string; project: Omit<StoredProject, 'id'> }) => void;
   setProject: (project: StoredProject) => void;
+  // 文件关联功能
+  saveToFile: () => Promise<boolean>;
+  openFromFile: () => Promise<boolean>;
+  hasLinkedFile: () => boolean;
+  getLinkedFilePath: () => string | undefined;
+  linkFileHandle: (handle: FileSystemFileHandle) => void;
 }

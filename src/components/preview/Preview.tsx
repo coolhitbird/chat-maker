@@ -84,23 +84,27 @@ export default function Preview() {
     setExportStatus('正在准备导出动画视频...');
 
     try {
+      const chatTitle = project.chatTitle || (isGroup ? groupInfo?.name : null) || platform.name || '微信聊天';
+      // 使用实际平台样式，而不是硬编码默认值
+      const platformStyles = platform.styles;
       const exportConfig: ExportConfig = {
-        fps: 30,
+        fps: settings.fps,
         width: settings.width,
         height: settings.height,
         styles: {
-          fontFamily: 'Microsoft YaHei, PingFang SC, sans-serif',
-          fontSize: 16,
-          avatarSize: 40,
-          bubblePadding: 12,
-          bubbleRadius: 18,
-          bubbleLeftBg: '#ffffff',
-          bubbleRightBg: '#95ec69',
-          bubbleLeftColor: '#1a1a1a',
-          bubbleRightColor: '#1a1a1a',
-          background: '#f5f5f5',
-          headerBg: '#f5f5f5',
-          headerColor: '#1a1a1a',
+          fontFamily: platformStyles.fontFamily,
+          fontSize: platformStyles.fontSize,
+          avatarSize: platformStyles.avatarSize,
+          bubblePadding: platformStyles.bubblePadding,
+          bubbleRadius: platformStyles.bubbleRadius,
+          bubbleLeftBg: platformStyles.bubbleLeftBg,
+          bubbleRightBg: platformStyles.bubbleRightBg,
+          bubbleLeftColor: platformStyles.bubbleLeftColor,
+          bubbleRightColor: platformStyles.bubbleRightColor,
+          background: platformStyles.background,
+          headerBg: platformStyles.headerBg,
+          headerColor: platformStyles.headerColor,
+          title: chatTitle,
         },
       };
 
@@ -115,7 +119,7 @@ export default function Preview() {
           messages,
           config,
           exportConfig,
-          [],
+          users,
           false,
           (progress) => {
             setExportStatus(`正在导出... ${progress}%`);
@@ -127,7 +131,7 @@ export default function Preview() {
           messages,
           config,
           exportConfig,
-          [],
+          users,
           false,
           (progress) => {
             setExportStatus(`正在导出... ${progress}%`);
@@ -139,19 +143,26 @@ export default function Preview() {
           messages,
           config,
           exportConfig,
-          [],
+          users,
           false,
           (progress) => {
             setExportStatus(`正在导出... ${progress}%`);
           }
         );
       } else {
+        // DEBUG: 检查传给 DOM 模式的消息 quote 数据
+        const msgWithQuote = messages.filter(m => m.quote);
+        if (msgWithQuote.length > 0) {
+          console.log('[Preview→DOM] 有 quote 的消息:', msgWithQuote.map(m => ({ id: m.id, sender: m.sender, quote: m.quote })));
+        } else {
+          console.warn('[Preview→DOM] 没有消息有 quote! messages:', JSON.stringify(messages.map(m => ({ id: m.id, type: m.type, content: m.content?.slice(0, 20) }))));
+        }
         setExportStatus(`正在导出... (DOM动画模式)`);
         videoBlob = await domTypingRenderer.render(
           messages,
           config,
           exportConfig,
-          [],
+          users,
           false,
           (progress) => {
             setExportStatus(`正在导出... ${progress}%`);
@@ -196,6 +207,8 @@ export default function Preview() {
     isPlayingRef.current = true;
     setVisibleCount(0);
     setTypingProgress({});
+    
+    try {
 
     const useTypingAnim = typingConfig.enabled && !typingConfig.fastMode;
     let sequences: Map<string, MessageTypingSequence> = new Map();
@@ -256,9 +269,13 @@ export default function Preview() {
       }
     }
 
-    isPlayingRef.current = false;
-    setIsPlaying(false);
-    setTypingProgress({});
+    } catch (err) {
+      console.error('Animation error:', err);
+    } finally {
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+      setTypingProgress({});
+    }
   }, [messages, setIsPlaying, typingConfig]);
 
   function getVisibleTextAtTimestamp(seq: MessageTypingSequence, timestamp: number): string {
@@ -425,63 +442,132 @@ export default function Preview() {
     try {
       if (typingConfig.enabled) {
         const renderMode = typingConfig.renderMode || 'loop';
-        let renderer;
-        let rendererName = '';
 
-        switch (renderMode) {
-          case 'loop':
-            renderer = loopTypingRenderer;
-            rendererName = '循环渲染';
-            break;
-          case 'content':
-            renderer = contentTypingRenderer;
-            rendererName = '内容修改';
-            break;
-          case 'dom':
-            renderer = domTypingRenderer;
-            rendererName = 'DOM动画';
-            break;
-          default:
-            renderer = loopTypingRenderer;
-            rendererName = '循环渲染';
-        }
+        if (renderMode === 'simple') {
+          setExportStatus(`正在加载 FFmpeg (简洁模式)...`);
+          await typingVideoExporter.init();
 
-        setExportStatus(`正在加载 FFmpeg (${rendererName}模式)...`);
-        await renderer.init();
+          setExportStatus(`正在生成视频帧 (简洁模式)...`);
+          const platformStyles = platform.styles || {};
+          const chatTitle = project.chatTitle || (isGroup ? groupInfo?.name : null) || platform.name;
 
-        setExportStatus(`正在生成视频帧 (${rendererName}模式)...`);
+          const videoBlob = await typingVideoExporter.export(
+            messages,
+            typingConfig,
+            {
+              width: settings.width,
+              height: settings.height,
+              fps: settings.fps,
+              styles: {
+                fontFamily: platformStyles.fontFamily,
+                fontSize: platformStyles.fontSize,
+                avatarSize: platformStyles.avatarSize,
+                bubblePadding: platformStyles.bubblePadding,
+                bubbleRadius: platformStyles.bubbleRadius,
+                bubbleLeftBg: platformStyles.bubbleLeftBg,
+                bubbleRightBg: platformStyles.bubbleRightBg,
+                bubbleLeftColor: platformStyles.bubbleLeftColor,
+                bubbleRightColor: platformStyles.bubbleRightColor,
+                background: platformStyles.background,
+                headerBg: platformStyles.headerBg,
+                headerColor: platformStyles.headerColor,
+                title: chatTitle,
+              },
+            },
+            users,
+            userSettings.theme === 'dark',
+            (progress) => {
+              setExportProgress(progress);
+            }
+          );
 
-        const platformStyles = platform.styles || {};
+          setExportStatus('正在下载...');
+          setExportProgress(95);
+          const url = URL.createObjectURL(videoBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `chat-${Date.now()}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
 
-        const videoBlob = await renderer.render(
-          messages,
-          typingConfig,
-          {
-            width: settings.width,
-            height: settings.height,
-            fps: settings.fps,
-            styles: platformStyles,
-          },
-          users,
-          userSettings.theme === 'dark',
-          (progress) => {
-            setExportProgress(progress);
+          setExportProgress(100);
+          setExportStatus('视频已下载！');
+        } else {
+          let renderer;
+          let rendererName = '';
+
+          switch (renderMode) {
+            case 'loop':
+              renderer = loopTypingRenderer;
+              rendererName = '循环渲染';
+              break;
+            case 'content':
+              renderer = contentTypingRenderer;
+              rendererName = '内容修改';
+              break;
+            case 'dom':
+              renderer = domTypingRenderer;
+              rendererName = 'DOM动画';
+              break;
+            default:
+              renderer = loopTypingRenderer;
+              rendererName = '循环渲染';
           }
-        );
-        
-        setExportStatus('正在下载...');
-        setExportProgress(95);
-        const url = URL.createObjectURL(videoBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chat-${Date.now()}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        setExportProgress(100);
-        setExportStatus('视频已下载！');
+
+          setExportStatus(`正在加载 FFmpeg (${rendererName}模式)...`);
+          await renderer.init();
+
+          setExportStatus(`正在生成视频帧 (${rendererName}模式)...`);
+
+          const platformStyles = platform.styles || {};
+          const chatTitle = project.chatTitle || (isGroup ? groupInfo?.name : null) || platform.name;
+
+          const videoBlob = await renderer.render(
+            messages,
+            typingConfig,
+            {
+              width: settings.width,
+              height: settings.height,
+              fps: settings.fps,
+              styles: {
+                fontFamily: platformStyles.fontFamily,
+                fontSize: platformStyles.fontSize,
+                avatarSize: platformStyles.avatarSize,
+                bubblePadding: platformStyles.bubblePadding,
+                bubbleRadius: platformStyles.bubbleRadius,
+                bubbleLeftBg: platformStyles.bubbleLeftBg,
+                bubbleRightBg: platformStyles.bubbleRightBg,
+                bubbleLeftColor: platformStyles.bubbleLeftColor,
+                bubbleRightColor: platformStyles.bubbleRightColor,
+                background: platformStyles.background,
+                headerBg: platformStyles.headerBg,
+                headerColor: platformStyles.headerColor,
+                title: chatTitle,
+              },
+            },
+            users,
+            userSettings.theme === 'dark',
+            (progress) => {
+              setExportProgress(progress);
+            }
+          );
+          
+          setExportStatus('正在下载...');
+          setExportProgress(95);
+          const url = URL.createObjectURL(videoBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `chat-${Date.now()}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          setExportProgress(100);
+          setExportStatus('视频已下载！');
+        }
       } else {
         const exporter = new Exporter();
         setExportStatus('正在加载 FFmpeg...');
@@ -506,7 +592,8 @@ export default function Preview() {
             setExportProgress(progress);
           },
           userSettings.theme === 'dark',
-          framesPerMessage
+          framesPerMessage,
+          users
         );
         
         setExportStatus('正在下载...');
@@ -731,9 +818,10 @@ export default function Preview() {
                 onChange={e => updateSettings({ videoBitrate: Number(e.target.value) })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               >
-                <option value="1000">1000k (标清)</option>
-                <option value="2000">2000k (高清)</option>
-                <option value="5000">5000k (超清)</option>
+                <option value="1">1 Mbps (流畅)</option>
+                <option value="2">2 Mbps (高清)</option>
+                <option value="5">5 Mbps (超清)</option>
+                <option value="8">8 Mbps (原画)</option>
               </select>
             </div>
           </div>
@@ -806,20 +894,6 @@ export default function Preview() {
         config={typingConfig}
         onSave={handleTypingConfigSave}
         messages={messages}
-        onOpenDebugPreview={() => {
-          if (messages.length === 0) {
-            alert('没有消息，请先添加对话');
-            return;
-          }
-          import('@/core/typingAnimation/debugPreview').then(({ downloadDebugHtml }) => {
-            downloadDebugHtml({
-              messages: messages,
-              config: { ...typingConfig, enabled: true },
-              width: 375,
-              height: 667,
-            });
-          });
-        }}
         onExportVideo={handleExportTypingVideo}
         isExportingVideo={isExportingVideo}
       />

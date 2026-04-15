@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import type { StoredProject } from '@/types';
 
@@ -13,60 +13,32 @@ export default function ProjectList() {
     deleteProject,
     duplicateProject,
     updateProjectName,
-    saveCurrentProject,
-    exportProject,
-    importProject,
+    saveToFile,
+    openFromFile,
+    hasLinkedFile,
+    getLinkedFilePath,
   } = useChatStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [importStatus, setImportStatus] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [saveStatus, setSaveStatus] = useState('');
 
-  const handleExport = () => {
-    const data = exportProject();
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chat-project-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  // 保存到文件
+  const handleSaveToFile = async () => {
+    setSaveStatus('保存中...');
+    const success = await saveToFile();
+    if (success) {
+      setSaveStatus('已保存');
+    } else {
+      setSaveStatus('取消');
+    }
+    setTimeout(() => setSaveStatus(''), 2000);
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const data = JSON.parse(content);
-
-        if (!data.version || !data.project) {
-          throw new Error('无效的项目文件格式');
-        }
-
-        importProject(data);
-        setImportStatus('导入成功！');
-        setTimeout(() => setImportStatus(''), 3000);
-      } catch (err) {
-        setImportStatus('导入失败：' + (err as Error).message);
-        setTimeout(() => setImportStatus(''), 5000);
-      }
-    };
-    reader.readAsText(file);
-    
-    e.target.value = '';
+  // 从文件打开
+  const handleOpenFromFile = async () => {
+    await openFromFile();
   };
 
   const currentProject = projects.find((p: StoredProject) => p.id === currentProjectId);
@@ -239,38 +211,41 @@ export default function ProjectList() {
       </div>
 
       <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+        {/* 文件操作区 */}
+        <div className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+          {hasLinkedFile() ? (
+            <span className="text-green-600 dark:text-green-400">
+              📁 {getLinkedFilePath()}
+            </span>
+          ) : (
+            <span>未关联文件，自动保存在浏览器缓存</span>
+          )}
+        </div>
+        
         <div className="flex gap-2">
           <button
-            onClick={() => { saveCurrentProject(); }}
-            className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            onClick={handleOpenFromFile}
+            className="flex-1 px-3 py-2 bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-600 transition-colors"
           >
-            保存项目
+            📂 打开
           </button>
           <button
-            onClick={handleExport}
-            className="flex-1 px-3 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors"
+            onClick={handleSaveToFile}
+            className={`flex-1 px-3 py-2 text-white text-sm rounded-lg transition-colors ${
+              hasLinkedFile() ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'
+            }`}
           >
-            导出项目
+            {hasLinkedFile() ? '💾 保存' : '💾 另存为...'}
           </button>
-          <button
-            onClick={handleImportClick}
-            className="flex-1 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            导入项目
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleFileChange}
-            className="hidden"
-          />
         </div>
-        {importStatus && (
+        
+        {saveStatus && (
           <div className={`mt-2 text-xs text-center py-1 rounded ${
-            importStatus.includes('成功') ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'
+            saveStatus.includes('已保存') || saveStatus.includes('成功')
+              ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30' 
+              : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30'
           }`}>
-            {importStatus}
+            {saveStatus}
           </div>
         )}
       </div>

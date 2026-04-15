@@ -20,56 +20,61 @@ export default function Transfer({
       ...containerStyle,
       width: (containerStyle.maxWidth || 200) * scale,
       overflow: 'hidden',
-      border: '1px solid #e0e0e0',
     }}>
       {/* 主体区域 */}
       <div style={{
         background: transferStyleConfig.headerBg,
-        padding: `${12 * scale}px`,
+        padding: `${14 * scale}px ${12 * scale}px`,
         display: 'flex',
         alignItems: 'center',
         gap: `${12 * scale}px`,
+        minHeight: 60 * scale,
       }}>
         {/* 图标 */}
         <div style={{
-          width: 44 * scale,
-          height: 44 * scale,
+          width: 42 * scale,
+          height: 42 * scale,
           borderRadius: '50%',
           background: transferStyleConfig.iconColor,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         }}>
           <span style={{ 
             color: '#fff', 
-            fontSize: 20 * scale, 
+            fontSize: 18 * scale, 
             fontWeight: 'bold' 
           }}>¥</span>
         </div>
         
         {/* 内容区 */}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             color: transferStyleConfig.titleColor,
             fontSize: 14 * scale,
             fontWeight: 500,
+            letterSpacing: '0.3px',
           }}>
-            转账
+            微信转账
           </div>
           <div style={{
             color: transferStyleConfig.titleColor,
             fontSize: 20 * scale,
             fontWeight: 'bold',
-            marginTop: 4 * scale,
+            marginTop: 2 * scale,
           }}>
             ¥{(amount / 100).toFixed(2)}
           </div>
           {note && (
             <div style={{
-              color: transferStyleConfig.contentColor,
-              fontSize: 12 * scale,
-              marginTop: 4 * scale,
+              color: '#666',
+              fontSize: 11 * scale,
+              marginTop: 2 * scale,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}>
               {note}
             </div>
@@ -80,15 +85,16 @@ export default function Transfer({
       {/* 底部状态 */}
       <div style={{
         background: transferStyleConfig.footerBg,
-        padding: `${8 * scale}px ${12 * scale}px`,
-        borderTop: '1px solid #e0e0e0',
+        padding: `${7 * scale}px ${12 * scale}px`,
+        borderTop: '1px solid #e8e8e8',
         textAlign: 'center',
       }}>
         <span style={{
           color: isReceived ? '#07c160' : transferStyleConfig.footerColor,
           fontSize: 12 * scale,
+          fontWeight: isReceived ? 500 : 400,
         }}>
-          {isReceived ? '已收款' : '待收款'}
+          {isReceived ? '已收款' : '请确认收款'}
         </span>
       </div>
     </div>

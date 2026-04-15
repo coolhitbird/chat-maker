@@ -5,6 +5,7 @@ import { getPlatformConfig } from '@/themes/wechat';
 import type { Message, SystemData } from '@/types';
 import { generateAvatar } from '@/utils/avatar';
 import { defaultLayoutConfig } from '@/core/messageLayout';
+import { getQuoteLabel } from '@/core/quoteUtils';
 import System from '@/components/messages/wechat/System';
 
 function SystemMessage({ data, scale }: { data: SystemData; scale: number }) {
@@ -67,9 +68,7 @@ export default function ChatContainer({
   const getBubbleStyle = (isUser: boolean): React.CSSProperties => {
     const baseBg = isUser ? styles.bubbleRightBg : styles.bubbleLeftBg;
     const baseColor = isUser ? styles.bubbleRightColor : styles.bubbleLeftColor;
-    
     const borderRadius = `${scaledBubbleRadius}px`;
-
     return {
       backgroundColor: baseBg,
       color: baseColor,
@@ -83,6 +82,60 @@ export default function ChatContainer({
       textAlign: 'left',
       maxWidth: maxBubbleWidth,
     };
+  };
+
+  // 渲染引用块（仿微信样式：左侧灰色竖线 + 发送者 + 内容摘要）
+  const renderQuote = (msg: Message) => {
+    if (!msg.quote) return null;
+    const isFileQuote = msg.quote.type === 'file';
+    const quoteTextColor = isFileQuote ? '#111' : (isDark ? '#aaa' : '#666');
+    const quoteBg = isFileQuote ? '#f5f5f5' : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
+    const borderColor = isFileQuote ? '#BDBDBD' : '#C9C9C9';
+
+    return (
+      <div style={{
+        display: 'flex',
+        gap: Math.round(6 * effectiveScale),
+        marginBottom: Math.round(6 * effectiveScale),
+        padding: `${Math.round(4 * effectiveScale)}px ${Math.round(8 * effectiveScale)}px`,
+        background: quoteBg,
+        borderRadius: Math.round(6 * effectiveScale),
+        borderLeft: `${Math.round(3 * effectiveScale)}px solid ${borderColor}`,
+      }}>
+        {isFileQuote && (
+          <div style={{
+            width: Math.round(18 * effectiveScale),
+            height: Math.round(18 * effectiveScale),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: Math.round(4 * effectiveScale),
+            backgroundColor: '#D9D9D9',
+            color: '#555',
+            fontSize: Math.round(11 * effectiveScale),
+            flexShrink: 0,
+          }}>
+            📄
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: Math.round(scaledFontSize * 0.75), color: quoteTextColor, fontWeight: 500, marginBottom: 2 }}>
+            {msg.quote.sender}
+          </div>
+          <div style={{
+            fontSize: Math.round(scaledFontSize * 0.82),
+            color: quoteTextColor,
+            wordBreak: 'break-word',
+            overflow: 'hidden',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+          }}>
+            {getQuoteLabel(msg.quote)}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderStatusBar = () => {
@@ -430,6 +483,7 @@ export default function ChatContainer({
                         <div style={{
                           ...getBubbleStyle(isUser),
                         }}>
+                          {renderQuote(msg)}
                           {msg.content ? (
                             <MessageContent message={msg} scale={effectiveScale} />
                           ) : (
@@ -519,6 +573,7 @@ export default function ChatContainer({
                       ...getBubbleStyle(isUser),
                       maxWidth: '100%',
                     }}>
+                      {renderQuote(msg)}
                       {msg.content ? (
                         <MessageContent message={msg} scale={effectiveScale} />
                       ) : (

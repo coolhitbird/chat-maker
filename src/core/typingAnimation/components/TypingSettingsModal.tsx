@@ -10,7 +10,6 @@ interface TypingSettingsModalProps {
   config: TypingAnimationConfig;
   onSave: (config: TypingAnimationConfig) => void;
   messages?: Message[];
-  onOpenDebugPreview?: () => void;
   onExportVideo?: () => void;
   isExportingVideo?: boolean;
 }
@@ -21,7 +20,6 @@ export default function TypingSettingsModal({
   config,
   onSave,
   messages = [],
-  onOpenDebugPreview,
   onExportVideo,
   isExportingVideo,
 }: TypingSettingsModalProps) {
@@ -375,7 +373,7 @@ export default function TypingSettingsModal({
                   <div>
                     <div className={`text-sm font-medium ${localConfig.renderMode === 'simple' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>简洁模式 ⭐</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      从上到下依次显示，支持所有消息类型
+                      Canvas逐帧渲染，消息从上到下依次出现，支持打字动画和所有消息类型，生成速度快
                     </div>
                   </div>
                 </label>
@@ -392,7 +390,7 @@ export default function TypingSettingsModal({
                   <div>
                     <div className={`text-sm font-medium ${localConfig.renderMode === 'loop' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>循环渲染模式</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      从底部向上堆叠，支持滚动
+                      消息从底部向上堆叠，内容满屏后自动滚动，支持引用块、语音STT等高级效果，适合长对话
                     </div>
                   </div>
                 </label>
@@ -409,7 +407,7 @@ export default function TypingSettingsModal({
                   <div>
                     <div className={`text-sm font-medium ${localConfig.renderMode === 'content' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>内容修改模式</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      修改消息内容后 Canvas 渲染
+                      与循环渲染类似，支持消息内容动态修改显示，引用块垂直居中，适合需要精细排版效果的导出
                     </div>
                   </div>
                 </label>
@@ -426,7 +424,7 @@ export default function TypingSettingsModal({
                   <div>
                     <div className={`text-sm font-medium ${localConfig.renderMode === 'dom' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'}`}>DOM 动画模式</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      HTML/CSS 渲染，效果真实但较慢
+                      实验性功能，渲染速度慢且部分效果不完整，暂不推荐使用
                     </div>
                   </div>
                 </label>
@@ -452,27 +450,19 @@ export default function TypingSettingsModal({
               </div>
             )}
 
-            {onOpenDebugPreview && (
+            {onExportVideo && (
               <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-800">
                 <div className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">
-                  调试工具
+                  操作区域
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={onOpenDebugPreview}
-                    className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium"
+                    onClick={onExportVideo}
+                    disabled={isExportingVideo}
+                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    调试预览
+                    {isExportingVideo ? '导出中...' : '导出视频'}
                   </button>
-                  {onExportVideo && (
-                    <button
-                      onClick={onExportVideo}
-                      disabled={isExportingVideo}
-                      className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isExportingVideo ? '导出中...' : '导出视频'}
-                    </button>
-                  )}
                 </div>
               </div>
             )}

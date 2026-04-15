@@ -15,6 +15,13 @@ export default function System({
 
   const getStyle = () => {
     switch (type) {
+      case 'time': // 时间 - 微信风格灰色，无图标
+        return {
+          backgroundColor: 'rgba(0,0,0,0.06)',
+          color: '#888',
+          fontStyle: 'normal',
+          icon: '',
+        };
       case 'recall': // 撤回消息 - 灰色斜体
         return {
           backgroundColor: '#f5f5f5',
@@ -85,7 +92,7 @@ export default function System({
         color: style.color,
         fontStyle: style.fontStyle,
       }}>
-        <span>{style.icon}</span>
+        {style.icon && <span>{style.icon}</span>}
         <span>{text}</span>
       </span>
     </div>

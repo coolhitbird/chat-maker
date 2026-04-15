@@ -19,22 +19,25 @@ export default function File({
       alignItems: 'center',
       gap: `${12 * scale}px`,
       padding: `${12 * scale}px`,
-      backgroundColor: isUser ? 'rgba(255,255,255,0.1)' : '#f5f5f5',
+      backgroundColor: isUser ? 'rgba(0,0,0,0.08)' : '#FFFFFF',
       borderRadius: 8 * scale,
+      border: `1px solid ${isUser ? 'rgba(255,255,255,0.2)' : '#E0E0E0'}`,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       cursor: 'pointer',
+      minWidth: `${160 * scale}px`,
     }}>
       {/* 文件图标 */}
       <div style={{
         width: 40 * scale,
         height: 40 * scale,
-        backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : '#e0e0e0',
+        backgroundColor: isUser ? 'rgba(255,255,255,0.25)' : '#EEF2FF',
         borderRadius: 8 * scale,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
       }}>
-        <svg width={24 * scale} height={24 * scale} viewBox="0 0 24 24" fill={isUser ? '#fff' : '#666'}>
+        <svg width={24 * scale} height={24 * scale} viewBox="0 0 24 24" fill={isUser ? '#fff' : '#4F46E5'}>
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
         </svg>
       </div>

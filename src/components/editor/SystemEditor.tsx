@@ -6,16 +6,19 @@ interface SystemEditorProps {
   onClose: () => void;
 }
 
+const SYSTEM_TEXT_MAX_LENGTH = 100;
+
 const SYSTEM_TYPES = [
   { value: 'recall', label: '撤回消息', icon: '↩️', defaultText: '你撤回了一条消息', placeholder: '小明 撤回了一条消息' },
   { value: 'pat', label: '拍一拍', icon: '🤚', defaultText: '小明 拍了拍 小红', placeholder: '小明 拍了拍 小红' },
   { value: 'addFriend', label: '添加好友', icon: '👤', defaultText: '小明 申请添加你为好友', placeholder: '小明 申请添加你为好友' },
   { value: 'invite', label: '邀请进群', icon: '👥', defaultText: '小明 邀请 小红 加入群聊', placeholder: '小明 邀请 小红 加入群聊' },
+  { value: 'time', label: '时间', icon: '🕐', defaultText: '昨天 10:30', placeholder: '昨天 10:30 / 2024-01-15 14:30' },
   { value: 'info', label: '系统消息', icon: 'ℹ️', defaultText: '欢迎使用聊天生成器', placeholder: '自定义系统消息内容' },
 ];
 
 export default function SystemEditor({ isOpen, onClose }: SystemEditorProps) {
-  const { addMessage, project } = useChatStore();
+  const { addMessage } = useChatStore();
   const [systemType, setSystemType] = useState('recall');
   const [text, setText] = useState('你撤回了一条消息');
 
@@ -26,19 +29,16 @@ export default function SystemEditor({ isOpen, onClose }: SystemEditorProps) {
   const handleSubmit = () => {
     if (!text.trim()) return;
 
-    // 使用第一个用户作为发送者
-    const user = project.users[0];
-
     addMessage({
-      role: 'user',
-      sender: user?.name || '系统',
-      avatar: user?.avatar || '',
-      content: text.trim(),
+      role: 'system',
+      sender: '',
+      avatar: '',
+      content: text.trim().slice(0, SYSTEM_TEXT_MAX_LENGTH),
       type: 'system',
       timestamp: Date.now(),
       system: {
-        text: text.trim(),
-        type: systemType as 'recall' | 'pat' | 'addFriend' | 'invite' | 'info',
+        text: text.trim().slice(0, SYSTEM_TEXT_MAX_LENGTH),
+        type: systemType as 'recall' | 'pat' | 'addFriend' | 'invite' | 'info' | 'time',
       },
     });
 
@@ -101,12 +101,23 @@ export default function SystemEditor({ isOpen, onClose }: SystemEditorProps) {
               type="text"
               value={text}
               onChange={e => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && text.trim()) {
+                  handleSubmit();
+                }
+              }}
               placeholder={selectedType.placeholder}
+              maxLength={SYSTEM_TEXT_MAX_LENGTH}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              提示：{selectedType.placeholder}
-            </p>
+            <div className="flex justify-between mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                提示：{selectedType.placeholder}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {text.length}/{SYSTEM_TEXT_MAX_LENGTH}
+              </p>
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2">

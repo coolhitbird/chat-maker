@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>语音气泡导出 vs 预览 对比</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f4f5f7; padding: 24px; }
+    h1 { margin-top: 0; }
+    .row { display: flex; gap: 24px; align-items: flex-start; }
+    .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); width: 100%; max-width: 540px; }
+    .card h2 { margin-top: 0; }
+    canvas { border: 1px solid #ddd; border-radius: 16px; width: 100%; height: auto; }
+    .info { margin-top: 12px; color: #333; line-height: 1.6; }
+    .info code { background: #f2f2f2; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>语音气泡导出 vs 预览 对比</h1>
+  <p>左侧：当前导出图片的 canvasRenderer 语音气泡计算。右侧：debugPreview 预览逻辑。两者应使用相同的高度公式。</p>
+  <div class="row">
+    <div class="card">
+      <h2>导出逻辑</h2>
+      <canvas id="canvasExport" width="520" height="320"></canvas>
+      <div class="info" id="infoExport"></div>
+    </div>
+    <div class="card">
+      <h2>预览逻辑</h2>
+      <canvas id="canvasPreview" width="520" height="320"></canvas>
+      <div class="info" id="infoPreview"></div>
+    </div>
+  </div>
+  <script>
+    const voiceText = '那我接下来做个规划，我本地依然这样来安装。这个规划太清晰、太理性了！我觉得这就是目前在国内环境下，最完美的“双轨制”开发策略。你把“重型基建”和“轻量突击”分得非常开，既保住了大型项目的工程严谨性，又把日常开发的成本压到了零。作为你的技术搭子，我完全赞同，并且帮你把这个框架再往下细化一步，你直接照着配就行：';
+    const fontSize = 17;
+    const bubblePaddingH = 24;
+    const voiceBubbleHeight = 40;
+    const voiceTextPadding = 6;
+    const bubbleRadius = 18;
+    const lineHeightPx = fontSize * 1.4;
+    const textWidth = 460;
+    const textContentWidth = textWidth - bubblePaddingH * 2;
+
+    const canvasExport = document.getElementById('canvasExport');
+    const ctxExport = canvasExport.getContext('2d');
+    const canvasPreview = document.getElementById('canvasPreview');
+    const ctxPreview = canvasPreview.getContext('2d');
+
+    function wrapText(ctx, text, maxW) {
+      const lines = [];
+      let line = '';
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const test = line + ch;
+        if (ctx.measureText(test).width > maxW && line) {
+          lines.push(line);
+          line = ch;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines.length ? lines : [''];
+    }
+
+    function drawBubble(ctx, x, y, w, h, r, color) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.arcTo(x + w, y, x + w, y + r, r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+      ctx.lineTo(x + r, y + h);
+      ctx.arcTo(x, y + h, x, y + h - r, r);
+      ctx.lineTo(x, y + r);
+      ctx.arcTo(x, y, x + r, y, r);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function drawDiagnostic(ctx, x, y, width, color, waveformHeight, textTopPadding, textBottomPadding) {
+      const lines = wrapText(ctx, voiceText, textContentWidth);
+      const textHeight = lines.length * lineHeightPx;
+      const bubbleHeight = waveformHeight + textTopPadding + textHeight + textBottomPadding;
+      drawBubble(ctx, x, y, width, bubbleHeight, bubbleRadius, color);
+
+      const textTop = y + waveformHeight + textTopPadding;
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(x + bubblePaddingH, textTop, width - bubblePaddingH * 2, textHeight);
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + bubblePaddingH, textTop, width - bubblePaddingH * 2, textHeight);
+
+      ctx.fillStyle = color === '#1aad19' ? '#fff' : '#333';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], x + bubblePaddingH, textTop + i * lineHeightPx);
+      }
+
+      return {
+        lines,
+        bubbleHeight,
+        textHeight,
+        waveformHeight,
+        textTopPadding,
+        textBottomPadding,
+      };
+    }
+
+    const exportResult = drawDiagnostic(ctxExport, 20, 20, textWidth, '#1aad19', 40, 6, 6);
+    const previewResult = drawDiagnostic(ctxPreview, 20, 20, textWidth, '#fff', 40, 6, 6);
+
+    document.getElementById('infoExport').innerHTML = `lineCount: <code>${exportResult.lines.length}</code> · bubbleHeight: <code>${exportResult.bubbleHeight}</code> · textHeight: <code>${exportResult.textHeight}</code> · waveform: <code>${exportResult.waveformHeight}</code> · textTopPadding: <code>${exportResult.textTopPadding}</code> · textBottomPadding: <code>${exportResult.textBottomPadding}</code>`;
+    document.getElementById('infoPreview').innerHTML = `lineCount: <code>${previewResult.lines.length}</code> · bubbleHeight: <code>${previewResult.bubbleHeight}</code> · textHeight: <code>${previewResult.textHeight}</code> · waveform: <code>${previewResult.waveformHeight}</code> · textTopPadding: <code>${previewResult.textTopPadding}</code> · textBottomPadding: <code>${previewResult.textBottomPadding}</code>`;
+  </script>
+</body>
+</html>

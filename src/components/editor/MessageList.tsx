@@ -1,7 +1,12 @@
 import { useChatStore } from '@/stores/chatStore';
 import MessageItem from './MessageItem';
+import type { Message } from '@/types';
 
-export default function MessageList() {
+interface MessageListProps {
+  onQuote?: (message: Message) => void;
+}
+
+export default function MessageList({ onQuote }: MessageListProps) {
   const { project, deleteMessage, reorderMessages, clearMessages } = useChatStore();
   const messages = project.messages;
 
@@ -36,6 +41,7 @@ export default function MessageList() {
             onDelete={() => deleteMessage(message.id)}
             onMoveUp={() => index > 0 && reorderMessages(index, index - 1)}
             onMoveDown={() => index < messages.length - 1 && reorderMessages(index, index + 1)}
+            onQuote={onQuote ? () => onQuote(message) : undefined}
           />
         ))}
       </div>

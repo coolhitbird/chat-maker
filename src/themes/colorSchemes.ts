@@ -11,24 +11,24 @@ export interface ColorScheme {
 
 export const wechatGreen: ColorScheme = {
   name: 'wechat-green',
-  background: '#e8e8e8',
-  bubbleLeftBg: '#ffffff',
-  bubbleRightBg: '#9fea58',
-  bubbleLeftColor: '#192020',
-  bubbleRightColor: '#192020',
+  background: '#EDEDED',       // 微信背景灰
+  bubbleLeftBg: '#FFFFFF',     // 对方气泡白
+  bubbleRightBg: '#07C160',    // 自己气泡微信绿
+  bubbleLeftColor: '#1A1A1A',  // 对方文字近黑
+  bubbleRightColor: '#FFFFFF', // 自己文字纯白
   headerBg: '#191919',
-  headerColor: '#ffffff',
+  headerColor: '#FFFFFF',
 };
 
 export const wechatDesktopGreen: ColorScheme = {
   name: 'wechat-desktop-green',
-  background: '#f5f5f5',
-  bubbleLeftBg: '#ffffff',
-  bubbleRightBg: '#95ec69',
-  bubbleLeftColor: '#333333',
-  bubbleRightColor: '#333333',
-  headerBg: '#2e2e2e',
-  headerColor: '#ffffff',
+  background: '#F5F5F5',
+  bubbleLeftBg: '#FFFFFF',
+  bubbleRightBg: '#07C160',
+  bubbleLeftColor: '#1A1A1A',
+  bubbleRightColor: '#FFFFFF',
+  headerBg: '#2E2E2E',
+  headerColor: '#FFFFFF',
 };
 
 export const qqBlue: ColorScheme = {

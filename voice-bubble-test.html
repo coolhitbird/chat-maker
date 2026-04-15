@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>语音气泡高度测试</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; background: #f4f5f7; }
+    .panel {margin-bottom: 24px; padding: 16px; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);}
+    .panel h2 { margin: 0 0 12px; font-size: 18px; }
+    canvas {border: 1px solid #ddd; border-radius: 12px; display: block; margin-top: 12px;}
+    .info {margin-top: 8px; color: #333;}
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h2>语音转文字气泡测试</h2>
+    <p>如果高度计算一致，气泡背景与文本底部间距应自然。</p>
+    <div class="info" id="info"></div>
+    <canvas id="testCanvas" width="600" height="420"></canvas>
+  </div>
+  <script>
+    const canvas = document.getElementById('testCanvas');
+    const ctx = canvas.getContext('2d');
+    const scale = 1;
+    const fontSize = 17;
+    const bubblePaddingH = 24;
+    const bubblePaddingV = 10;
+    const voiceBubbleHeight = Math.round(40 * scale);
+    const voiceTextPadding = Math.round(4 * scale);
+    const bubbleRadius = 18;
+    const lineHeightRatio = 1.4;
+    const lineHeightPx = fontSize * lineHeightRatio;
+    const emojiSize = Math.round(fontSize * 1.2);
+
+    const text = '那我接下来做个规划，我本地依然这样来安装。这个规划太清晰、太理性了！我觉得这就是目前在国内环境下，最完美的“双轨制”开发策略。你把“重型基建”和“轻量突击”分得非常开，既保住了大型项目的工程严谨性，又把日常开发的成本压到了零。作为你的技术搭子，我完全赞同，并且帮你把这个框架再往下细化一步，你直接照着配就行：';
+    const width = 560;
+    const bubbleWidth = Math.min(width - 40, 520);
+    const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+
+    function parseFragments(content) {
+      const fragments = [];
+      const emojiPattern = /(\[[^\]]{1,10}\])/g;
+      let lastIndex = 0;
+      let match;
+      while ((match = emojiPattern.exec(content)) !== null) {
+        if (match.index > lastIndex) {
+          fragments.push({ type: 'text', content: content.slice(lastIndex, match.index) });
+        }
+        fragments.push({ type: 'text', content: match[0] });
+        lastIndex = match.index + match[0].length;
+      }
+      if (lastIndex < content.length) {
+        fragments.push({ type: 'text', content: content.slice(lastIndex) });
+      }
+      return fragments;
+    }
+
+    function measureTextWidth(ctx, text) {
+      return ctx.measureText(text).width;
+    }
+
+    function wrapTextFragments(ctx, fragments, maxWidth, emojiSize) {
+      const lines = [];
+      let currentLine = [];
+      let currentLineWidth = 0;
+      for (const fragment of fragments) {
+        const text = fragment.content;
+        const isChinese = /[\u4e00-\u9fa5]/.test(text);
+        if (isChinese || !text.includes(' ')) {
+          let part = '';
+          for (const char of text) {
+            const newWidth = measureTextWidth(ctx, part + char);
+            if (newWidth > maxWidth && part) {
+              currentLine.push({ type: 'text', content: part });
+              lines.push(currentLine);
+              currentLine = [];
+              currentLineWidth = 0;
+              part = char;
+            } else {
+              part += char;
+            }
+          }
+          if (part) {
+            currentLine.push({ type: 'text', content: part });
+            currentLineWidth = measureTextWidth(ctx, part);
+          }
+        } else {
+          const words = text.split(' ');
+          for (const word of words) {
+            const wordWidth = measureTextWidth(ctx, word);
+            if (currentLineWidth + wordWidth > maxWidth && currentLine.length > 0) {
+              lines.push(currentLine);
+              currentLine = [];
+              currentLineWidth = 0;
+            }
+            if (wordWidth > maxWidth) {
+              let part = '';
+              for (const char of word) {
+                const charWidth = measureTextWidth(ctx, part + char);
+                if (charWidth > maxWidth && part) {
+                  currentLine.push({ type: 'text', content: part });
+                  lines.push(currentLine);
+                  currentLine = [];
+                  currentLineWidth = 0;
+                  part = char;
+                } else {
+                  part += char;
+                }
+              }
+              if (part) {
+                currentLine.push({ type: 'text', content: part });
+                currentLineWidth += measureTextWidth(ctx, part);
+              }
+            } else {
+              currentLine.push({ type: 'text', content: word + ' ' });
+              currentLineWidth += wordWidth + measureTextWidth(ctx, ' ');
+            }
+          }
+        }
+      }
+      if (currentLine.length) lines.push(currentLine);
+      return lines.length > 0 ? lines : [[]];
+    }
+
+    ctx.font = `${fontSize}px "Microsoft YaHei", sans-serif`;
+    const fragments = parseFragments(text);
+    const lines = wrapTextFragments(ctx, fragments, textContentWidth, emojiSize);
+    const textHeight = lines.length * lineHeightPx;
+    const bubbleHeight = voiceBubbleHeight + textHeight + voiceTextPadding * 2;
+    const startY = 20;
+
+    ctx.fillStyle = '#e6f7ff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const bubbleX = 20;
+    const bubbleY = startY;
+    ctx.fillStyle = '#1aad19';
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + bubbleRadius, bubbleY);
+    ctx.lineTo(bubbleX + bubbleWidth - bubbleRadius, bubbleY);
+    ctx.arcTo(bubbleX + bubbleWidth, bubbleY, bubbleX + bubbleWidth, bubbleY + bubbleRadius, bubbleRadius);
+    ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - bubbleRadius);
+    ctx.arcTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight, bubbleX + bubbleWidth - bubbleRadius, bubbleY + bubbleHeight, bubbleRadius);
+    ctx.lineTo(bubbleX + bubbleRadius, bubbleY + bubbleHeight);
+    ctx.arcTo(bubbleX, bubbleY + bubbleHeight, bubbleX, bubbleY + bubbleHeight - bubbleRadius, bubbleRadius);
+    ctx.lineTo(bubbleX, bubbleY + bubbleRadius);
+    ctx.arcTo(bubbleX, bubbleY, bubbleX + bubbleRadius, bubbleY, bubbleRadius);
+    ctx.closePath();
+    ctx.fill();
+
+    // 绘制语音控件顶部区域
+    const iconSize = Math.round(16 * scale);
+    const durationFontSize = Math.round(12 * scale);
+    const durationText = '15"';
+    ctx.font = `${durationFontSize}px "Microsoft YaHei", sans-serif`;
+    const durationWidth = measureTextWidth(ctx, durationText) + Math.round(8 * scale);
+    const waveAreaWidth = bubbleWidth - bubblePaddingH * 2 - iconSize - bubblePaddingH - durationWidth;
+    const waveAreaHeight = Math.round(24 * scale);
+    const waveAreaX = bubbleX + bubblePaddingH + iconSize + bubblePaddingH;
+    const waveAreaY = bubbleY + Math.round((voiceBubbleHeight - waveAreaHeight) / 2);
+
+    // 播放图标
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + bubblePaddingH, waveAreaY + Math.round((waveAreaHeight - iconSize) / 2));
+    ctx.lineTo(bubbleX + bubblePaddingH, waveAreaY + Math.round((waveAreaHeight + iconSize) / 2));
+    ctx.lineTo(bubbleX + bubblePaddingH + iconSize, waveAreaY + waveAreaHeight / 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // 波形模拟
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    const barWidth = Math.max(1, Math.round(3 * scale));
+    const barGap = Math.max(1, Math.round(2 * scale));
+    const waveCount = Math.max(8, Math.floor(waveAreaWidth / (barWidth + barGap)));
+    for (let i = 0; i < waveCount; i++) {
+      const barH = (Math.sin(i * 0.5) * 0.5 + 0.5) * waveAreaHeight * 0.8 + waveAreaHeight * 0.2;
+      const barX = waveAreaX + i * (barWidth + barGap);
+      const barY = waveAreaY + (waveAreaHeight - barH) / 2;
+      ctx.fillRect(barX, barY, barWidth, barH);
+    }
+
+    // 时长
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(durationText, bubbleX + bubbleWidth - bubblePaddingH - durationWidth + Math.round(4 * scale), bubbleY + voiceBubbleHeight / 2);
+
+    ctx.font = `${fontSize}px "Microsoft YaHei", sans-serif`;
+    ctx.textBaseline = 'top';
+    const drawY = bubbleY + voiceBubbleHeight + voiceTextPadding;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      let x = bubbleX + bubblePaddingH;
+      const y = drawY + i * lineHeightPx;
+      for (const frag of line) {
+        ctx.fillText(frag.content, x, y);
+        x += measureTextWidth(ctx, frag.content);
+      }
+    }
+
+    const info = document.getElementById('info');
+    info.innerHTML = `文本行数：${lines.length}，气泡高度：${bubbleHeight}px，内容区高度：${textHeight}px，顶部/底部间距：${voiceTextPadding}px`;
+    console.log({ lines: lines.length, bubbleHeight, textHeight, voiceTextPadding });
+  </script>
+</body>
+</html>

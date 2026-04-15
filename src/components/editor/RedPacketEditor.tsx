@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { generateAvatar } from '@/utils/avatar';
 import type { Message, RedPacketData } from '@/types';
@@ -8,12 +8,19 @@ interface RedPacketEditorProps {
   onClose: () => void;
 }
 
+const GREETING_MAX_LENGTH = 20;
+
 export default function RedPacketEditor({ isOpen, onClose }: RedPacketEditorProps) {
   const { project, addMessage } = useChatStore();
   const [greeting, setGreeting] = useState('恭喜发财，大吉大利');
   const [amount, setAmount] = useState('200');
-  const [sender, setSender] = useState(project.users[0]?.name || '用户A');
+  const [sender, setSender] = useState(project.users[0]?.name || '');
   const [isOpened, setIsOpened] = useState(false);
+
+  // 项目切换时同步 sender 到第一个用户
+  useEffect(() => {
+    if (project.users[0]) setSender(project.users[0].name);
+  }, [project.id]);
 
   const handleSubmit = () => {
     if (!greeting.trim()) return;
@@ -22,7 +29,7 @@ export default function RedPacketEditor({ isOpen, onClose }: RedPacketEditorProp
 
     const redPacketData: RedPacketData = {
       amount: parseInt(amount) || 200,
-      greeting: greeting.trim(),
+      greeting: greeting.trim().slice(0, GREETING_MAX_LENGTH),
       sender: sender,
       isOpened: isOpened,
     };
@@ -31,7 +38,7 @@ export default function RedPacketEditor({ isOpen, onClose }: RedPacketEditorProp
       role: user?.role || 'user',
       sender: sender,
       avatar: user?.avatar || generateAvatar(sender),
-      content: greeting.trim(),
+      content: greeting.trim().slice(0, GREETING_MAX_LENGTH),
       type: 'redpacket',
       timestamp: Date.now(),
       redPacket: redPacketData,
@@ -81,9 +88,18 @@ export default function RedPacketEditor({ isOpen, onClose }: RedPacketEditorProp
             type="text"
             value={greeting}
             onChange={(e) => setGreeting(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && greeting.trim()) {
+                handleSubmit();
+              }
+            }}
             placeholder="恭喜发财，大吉大利"
+            maxLength={GREETING_MAX_LENGTH}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
           />
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+            {greeting.length}/{GREETING_MAX_LENGTH}
+          </div>
         </div>
 
         <div className="mb-4">

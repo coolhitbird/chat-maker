@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { generateAvatar } from '@/utils/avatar';
 import type { Message } from '@/types';
@@ -10,11 +10,14 @@ interface ImageEditorProps {
 
 export default function ImageEditor({ isOpen, onClose }: ImageEditorProps) {
   const { project, addMessage } = useChatStore();
-  const [sender, setSender] = useState(project.users[0]?.name || '用户A');
+  const [sender, setSender] = useState(project.users[0]?.name || '');
   const [caption, setCaption] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
-  const handleSubmit = () => {
+  // 项目切换时同步 sender 到第一个用户
+  useEffect(() => {
+    if (project.users[0]) setSender(project.users[0].name);
+  }, [project.id]);  const handleSubmit = () => {
     if (!imageUrl.trim() && !caption.trim()) return;
 
     const user = project.users.find(u => u.name === sender);

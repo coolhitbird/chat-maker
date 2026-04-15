@@ -433,7 +433,7 @@ export function generateDebugHtml(options: DebugPreviewOptions): string {
 
   function drawVoice(x, y, w, h, voice, bubbleColor) {
     var iconSize = 14;
-    var waveAreaH = 36;
+    var waveAreaH = 40;
     var textColor = '#333';
     
     drawBubble(x, y, w, h, RADIUS, bubbleColor);
@@ -460,7 +460,7 @@ export function generateDebugHtml(options: DebugPreviewOptions): string {
     ctx.fillText(voice.duration + '"', x + w - PAD - 40, y + waveAreaH / 2);
     
     if (voice.text) {
-      var textY = y + waveAreaH + 6;
+      var textY = y + waveAreaH + PAD;
       ctx.fillStyle = textColor;
       ctx.font = FONT + 'px "Microsoft YaHei", sans-serif';
       ctx.textBaseline = 'top';
@@ -600,9 +600,9 @@ export function generateDebugHtml(options: DebugPreviewOptions): string {
         if (calcMsg.voice && calcMsg.voice.text) {
           ctx.font = FONT + 'px "Microsoft YaHei", sans-serif';
           var vLines = wrapText(calcMsg.voice.text, MAX_W - PAD * 2);
-          calcBubbleH = 36 + vLines.length * LH + 12;
+          calcBubbleH = 40 + vLines.length * LH + PAD * 2;
         } else {
-          calcBubbleH = 36;
+          calcBubbleH = 40;
         }
       }
       else if (calcMsg.type === 'image') calcBubbleH = 180;
@@ -686,9 +686,9 @@ export function generateDebugHtml(options: DebugPreviewOptions): string {
           ctx.font = FONT + 'px "Microsoft YaHei", sans-serif';
           var voiceLines = wrapText(m.voice.text, bubbleW - PAD * 2);
           var voiceTextH = voiceLines.length * LH;
-          bubbleH = 36 + voiceTextH + 12; // 波形36 + 文字区域 + padding
+          bubbleH = 40 + voiceTextH + PAD * 2; // 波形40 + 文字区域 + padding
         } else {
-          bubbleH = 36;
+          bubbleH = 40;
         }
         bubbleX = isUser ? ax - GAP - bubbleW : ax + AVATAR + GAP;
         drawVoice(bubbleX, bubbleY, bubbleW, bubbleH, m.voice, bubbleBg);
@@ -833,5 +833,18 @@ export function openDebugPreview(options: DebugPreviewOptions) {
   const html = generateDebugHtml(options);
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
+  const win = window.open(url, '_blank');
+  // 清理 object URL（浏览器会保留 blob 直到窗口关闭，但我们可以尝试在窗口关闭后清理）
+  if (win) {
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      win.removeEventListener('beforeunload', cleanup);
+    };
+    win.addEventListener('beforeunload', cleanup);
+    // 备用：5秒后清理（如果窗口还在，blob 仍然有效）
+    setTimeout(cleanup, 5000);
+  } else {
+    // 如果窗口被拦截，立即清理
+    URL.revokeObjectURL(url);
+  }
 }

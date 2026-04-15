@@ -6,10 +6,13 @@ import TextImporter from '@/components/editor/TextImporter';
 import UserManager from '@/components/editor/UserManager';
 import ProjectList from '@/components/editor/ProjectList';
 import Preview from '@/components/preview/Preview';
+import type { Message } from '@/types';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
   const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
+  const [quoteMessage, setQuoteMessage] = useState<Message | null>(null);
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const { userSettings, saveCurrentProject, updateUserSettings } = useChatStore();
 
   const isDark = userSettings.theme === 'dark';
@@ -35,6 +38,14 @@ function App() {
   }, [userSettings.autoSave, userSettings.autoSaveInterval, saveCurrentProject]);
 
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveCurrentProject();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveCurrentProject]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -46,6 +57,17 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [saveCurrentProject]);
+
+  // 监听存储警告事件
+  useEffect(() => {
+    const handleStorageWarning = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setStorageWarning(detail?.message || '存储空间不足');
+      setTimeout(() => setStorageWarning(null), 8000);
+    };
+    window.addEventListener('chatmaker:storage-warning', handleStorageWarning);
+    return () => window.removeEventListener('chatmaker:storage-warning', handleStorageWarning);
+  }, []);
 
   const toggleTheme = () => {
     updateUserSettings({ theme: isDark ? 'light' : 'dark' });
@@ -107,11 +129,14 @@ function App() {
             <div className="lg:col-span-2 space-y-4">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                 <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">消息列表</h2>
-                <MessageList />
+                <MessageList onQuote={(msg) => setQuoteMessage(msg)} />
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                 <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">添加消息</h2>
-                <MessageInput />
+                <MessageInput
+                  quoteMessage={quoteMessage}
+                  onClearQuote={() => setQuoteMessage(null)}
+                />
               </div>
             </div>
               <div className="space-y-4">
@@ -135,6 +160,27 @@ function App() {
           <Preview />
         </div>
       </main>
+
+      {/* 存储空间警告 */}
+      {storageWarning && (
+        <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-red-50 dark:bg-red-900/50 border border-red-300 dark:border-red-700 rounded-lg shadow-lg p-4 animate-fade-in">
+          <div className="flex items-start gap-3">
+            <span className="text-red-500 text-lg">⚠️</span>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800 dark:text-red-200">存储空间警告</p>
+              <p className="text-xs text-red-600 dark:text-red-300 mt-1">{storageWarning}</p>
+            </div>
+            <button
+              onClick={() => setStorageWarning(null)}
+              className="text-red-400 hover:text-red-600 dark:hover:text-red-200"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

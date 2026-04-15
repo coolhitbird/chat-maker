@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import type { Message, UserProfile } from '@/types';
 import type { TypingAnimationConfig, ExportConfig, MessageTypingSequence } from '../types';
 import { generateTypingSequence, getVisibleContentAtTime, estimateDuration, calculateSpeedMultiplier } from '../generators';
+import { getQuoteSummaryForDOM } from '../../quoteUtils';
 import { wechatEmojis } from '@/utils/emoji';
 
 // emoji map for DOM rendering: [微笑] → unicode
@@ -23,6 +24,23 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+async function waitForImages(container: HTMLElement, timeout = 3000): Promise<void> {
+  const images = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
+  if (images.length === 0) return;
+
+  await Promise.race([
+    Promise.all(images.map(img => new Promise<void>(resolve => {
+      if (img.complete) {
+        resolve();
+        return;
+      }
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    })) ),
+    new Promise<void>(resolve => setTimeout(resolve, timeout)),
+  ]);
 }
 
 function getInitials(name: string): string {
@@ -54,28 +72,28 @@ function createTextBubbleHtml(innerHtml: string, isUser: boolean, darkMode: bool
   const paddingV = Math.round(10 * scale);
   const borderRadius = Math.round(18 * scale);
   const fontSize = Math.round((styles.fontSize || 16) * scale);
-  return `<div style="background:${bg};color:${color};padding:${paddingV}px ${paddingH}px;border-radius:${borderRadius}px;font-size:${fontSize}px;line-height:1.4;max-width:100%;word-break:break-word;display:inline-block;vertical-align:top;box-sizing:border-box;">${innerHtml}</div>`;
+  return `<div style="background:${bg};color:${color};padding:${paddingV}px ${paddingH}px;border-radius:${borderRadius}px;font-size:${fontSize}px;line-height:1.4;max-width:100%;word-break:break-word;display:inline-block;vertical-align:middle;box-sizing:border-box;">${innerHtml}</div>`;
 }
 
 function createRedPacketHtml(msg: Message, scale: number): string {
   const amount = ((msg.redPacket?.amount || 0) / 100).toFixed(2);
   const greeting = escapeHtml(msg.redPacket?.greeting || '恭喜发财，大吉大利');
   const isOpened = msg.redPacket?.isOpened || false;
-  const w = Math.round(180 * scale);
+  const w = Math.round(200 * scale);
   const p = Math.round(12 * scale);
   return `<div style="background:#fff;border-radius:${Math.round(10*scale)}px;width:${w}px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
     <div style="background:linear-gradient(135deg,#e74c3c,#c0392b);padding:${p}px;display:flex;align-items:center;gap:${Math.round(10*scale)}px;">
       <div style="width:${Math.round(44*scale)}px;height:${Math.round(44*scale)}px;background:#ffd700;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${Math.round(22*scale)}px;">🧧</div>
-      <div style="color:#fff;"><div style="font-weight:bold;font-size:${Math.round(15*scale)}px;">微信红包</div><div style="font-size:${Math.round(12*scale)}px;opacity:0.9;">${greeting}</div></div>
+      <div style="color:#fff;"><div style="font-weight:bold;font-size:${Math.round(15*scale)}px;">微信红包</div><div style="font-size:${Math.round(12*scale)}px;opacity:0.9;margin-top:${Math.round(2*scale)}px;">${greeting}</div></div>
     </div>
-    <div style="background:#f8f8f8;padding:${Math.round(8*scale)}px;text-align:center;border-top:1px solid #eee;font-size:${Math.round(12*scale)}px;color:${isOpened?'#e74c3c':'#666'};">${isOpened?`已领取 ¥${amount}`:'领取红包'}</div>
+    <div style="background:#f8f8f8;padding:${Math.round(8*scale)}px;text-align:center;border-top:1px solid #eee;font-size:${Math.round(12*scale)}px;color:${isOpened?'#c0392b':'#666'};">${isOpened?`已领取 ¥${amount}`:'领取红包'}</div>
   </div>`;
 }
 
 function createTransferHtml(msg: Message, scale: number): string {
   const amount = ((msg.transfer?.amount || 0) / 100).toFixed(2);
   const isReceived = msg.transfer?.isReceived || false;
-  const w = Math.round(180 * scale);
+  const w = Math.round(200 * scale);
   const p = Math.round(12 * scale);
   return `<div style="background:#fff;border-radius:${Math.round(10*scale)}px;width:${w}px;overflow:hidden;border:1px solid #e0e0e0;">
     <div style="background:#f5f5f5;padding:${p}px;display:flex;align-items:center;gap:${Math.round(10*scale)}px;">
@@ -111,7 +129,7 @@ function createImageHtml(msg: Message, scale: number): string {
   const size = Math.round(180 * scale);
   const r = Math.round(12 * scale);
   if (msg.image?.url) {
-    return `<img src="${msg.image.url}" crossorigin="anonymous" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:${r}px;display:block;" />`;
+    return `<img src="${msg.image.url}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:${r}px;display:block;" />`;
   }
   return `<div style="width:${size}px;height:${size}px;background:#e0e0e0;border-radius:${r}px;display:flex;align-items:center;justify-content:center;font-size:${Math.round(40*scale)}px;">📷</div>`;
 }
@@ -135,17 +153,21 @@ function createFileHtml(msg: Message, scale: number): string {
   </div>`;
 }
 
-function createQuoteHtml(quote: Message['quote'], scale: number): string {
+function createQuoteHtml(quote: Message['quote'], scale: number, _isUser: boolean, darkMode: boolean): string {
   if (!quote) return '';
   const fontSize = Math.round(11 * scale);
   const p = Math.round(6 * scale);
-  return `<div style="display:flex;gap:${p}px;margin-bottom:${Math.round(6*scale)}px;padding:${Math.round(4*scale)}px ${p}px;background:rgba(0,0,0,0.05);border-radius:${Math.round(4*scale)}px;border-left:${Math.round(3*scale)}px solid #C9C9C9;">
-    <div style="flex:1;min-width:0;">
-      <div style="font-size:${fontSize}px;color:#888;font-weight:bold;margin-bottom:2px;">${escapeHtml(quote.sender)}</div>
-      <div style="font-size:${fontSize}px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(quote.content)}</div>
-    </div>
-  </div>`;
+  const isFileQuote = quote.type === 'file';
+  const bgColor = isFileQuote ? '#f5f5f5' : (darkMode ? '#333333' : '#f0f0f0');
+  const borderColor = isFileQuote ? '#BDBDBD' : '#C9C9C9';
+  const textColor = isFileQuote ? '#111' : (darkMode ? '#ccc' : '#555');
+  const iconHtml = isFileQuote ? `📄 ` : '';
+  const summaryRaw = getQuoteSummaryForDOM(quote, 30);
+  const summaryEmoji = renderTextWithEmoji(summaryRaw);
+  const summary = escapeHtml(summaryEmoji);
+  return `<div style="margin-bottom:${Math.round(6*scale)}px;padding:${Math.round(4*scale)}px ${p}px;background:${bgColor};border-radius:${Math.round(4*scale)}px;border-left:${Math.round(3*scale)}px solid ${borderColor};font-size:${fontSize}px;color:${textColor};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${iconHtml}<b>${escapeHtml(quote.sender)}</b>: ${summary}</div>`;
 }
+
 
 function createMessageHtml(
   msg: Message,
@@ -168,18 +190,23 @@ function createMessageHtml(
 
   let contentHtml = '';
   if (msg.type === 'redpacket') {
-    contentHtml = createRedPacketHtml(msg, scale);
+    const quoteHtml = createQuoteHtml(msg.quote, scale, isUser, darkMode);
+    contentHtml = quoteHtml + createRedPacketHtml(msg, scale);
   } else if (msg.type === 'transfer') {
-    contentHtml = createTransferHtml(msg, scale);
+    const quoteHtml = createQuoteHtml(msg.quote, scale, isUser, darkMode);
+    contentHtml = quoteHtml + createTransferHtml(msg, scale);
   } else if (msg.type === 'image') {
-    contentHtml = createImageHtml(msg, scale);
+    const quoteHtml = createQuoteHtml(msg.quote, scale, isUser, darkMode);
+    contentHtml = quoteHtml + createImageHtml(msg, scale);
   } else if (msg.type === 'voice') {
-    contentHtml = createVoiceHtml(msg, isUser, darkMode, styles, scale);
+    const quoteHtml = createQuoteHtml(msg.quote, scale, isUser, darkMode);
+    contentHtml = quoteHtml + createVoiceHtml(msg, isUser, darkMode, styles, scale);
   } else if (msg.type === 'file') {
-    contentHtml = createFileHtml(msg, scale);
+    const quoteHtml = createQuoteHtml(msg.quote, scale, isUser, darkMode);
+    contentHtml = quoteHtml + createFileHtml(msg, scale);
   } else {
     // 文字消息：使用 visibleContent（支持打字动画），在气泡内顶部加引用块
-    const quoteHtml = createQuoteHtml(msg.quote, scale);
+    const quoteHtml = createQuoteHtml(msg.quote, scale, isUser, darkMode);
     contentHtml = createTextBubbleHtml(quoteHtml + renderTextWithEmoji(escapeHtml(visibleContent)), isUser, darkMode, styles, scale);
   }
 
@@ -284,7 +311,7 @@ export class DOMTypingRenderer {
 
     // 构建用户头像 map
     const userAvatarMap = new Map<string, string>();
-    for (const user of users) {
+        for (const user of users) {
       if (user.avatar) userAvatarMap.set(user.name, user.avatar);
     }
 
@@ -390,6 +417,7 @@ export class DOMTypingRenderer {
       this.container.innerHTML = buildPageHtml(visibleMessages, typingProgress, darkMode, styles, width, height, scrollTop, userAvatarMap);
 
       await new Promise(resolve => requestAnimationFrame(resolve));
+      await waitForImages(this.container);
 
       try {
         const htmlCanvas = await html2canvas(this.container.firstElementChild as HTMLElement, {

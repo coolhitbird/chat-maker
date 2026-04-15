@@ -36,6 +36,105 @@ function getSystemMessageStyleForCanvas(type?: string): { bg: string; color: str
   }
 }
 
+function drawQuote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, quote: Message['quote'], fontSize: number, scale: number, _fontFamily?: string): number {
+  if (!quote) return 0;
+  const miniScale = 0.6;
+  const barW = Math.round(3 * scale);
+  const pad = Math.round(6 * scale);
+  const contentX = x + barW + pad;
+  const contentWidth = w - barW - pad * 2;
+  let contentHeight = Math.round(32 * miniScale * scale);
+
+  if (quote.type === 'file' && quote.file) {
+    contentHeight = Math.round(48 * miniScale * scale);
+    drawMiniFileQuote(ctx, contentX, y, contentWidth, contentHeight, quote.file, miniScale * scale);
+  } else if (quote.type === 'image' && quote.image) {
+    contentHeight = Math.round(120 * miniScale * scale);
+    drawMiniImageQuote(ctx, contentX, y, contentWidth, contentHeight, quote.image, miniScale * scale);
+  } else {
+    const innerPad = Math.round(8 * miniScale * scale);
+    const maxW = contentWidth - innerPad * 2;
+    const emojiSize2 = Math.round(fontSize * miniScale * 1.2);
+    // 必须先设置字体，否则 measureTextWidth 用的是默认字体（不是 Microsoft YaHei）
+    ctx.font = `${Math.round(fontSize * miniScale * 0.9)}px "Microsoft YaHei", sans-serif`;
+    const fragments = parseFragments(quote.content || '');
+    const allLines = wrapTextFragments(ctx, fragments, maxW, emojiSize2);
+    const displayLines = allLines.slice(0, 2);
+    const lineH = Math.round(fontSize * miniScale * 1.2);
+    contentHeight = Math.max(
+      contentHeight,
+      innerPad + lineH + displayLines.length * lineH + innerPad,
+    );
+
+    drawBubble(ctx, contentX, y, contentWidth, contentHeight, Math.round(8 * miniScale * scale), 'rgba(0,0,0,0.05)');
+    const textX = contentX + innerPad;
+    const textY = y + innerPad;
+
+    ctx.fillStyle = '#111';
+    ctx.font = `bold ${Math.round(fontSize * miniScale * 0.9)}px "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(quote.sender, textX, textY);
+
+    ctx.fillStyle = '#666';
+    ctx.font = `${Math.round(fontSize * miniScale * 0.9)}px "Microsoft YaHei", sans-serif`;
+
+    const contentY = textY + lineH;
+    for (let i = 0; i < displayLines.length; i++) {
+      const line = displayLines[i];
+      const lineY = contentY + i * lineH;
+      let xOffset = 0;
+      for (const frag of line) {
+        if (frag.type === 'emoji') {
+          ctx.font = `${lineH}px sans-serif`;
+          ctx.fillText(frag.emojiUnicode || frag.content, textX + xOffset, lineY);
+          xOffset += lineH + 2;
+        } else {
+          ctx.fillText(frag.content, textX + xOffset, lineY);
+          xOffset += measureTextWidth(ctx, frag.content);
+        }
+      }
+    }
+  }
+
+  ctx.fillStyle = '#C9C9C9';
+  ctx.fillRect(x, y, barW, contentHeight);
+  return contentHeight + Math.round(4 * scale);
+}
+
+function getQuoteBlockHeight(
+  ctx: CanvasRenderingContext2D,
+  quote: Message['quote'],
+  availableWidth: number,
+  fontSize: number,
+  scale: number,
+): number {
+  const miniScale = 0.6;
+  if (!quote) return 0;
+
+  const barW = Math.round(3 * scale);
+  const pad = Math.round(6 * scale);
+  const contentWidth = availableWidth - barW - pad * 2;
+
+  if (quote.type === 'file' && quote.file) {
+    return Math.round(48 * miniScale * scale) + Math.round(4 * scale);
+  }
+  if (quote.type === 'image' && quote.image) {
+    return Math.round(120 * miniScale * scale) + Math.round(4 * scale);
+  }
+
+  const innerPad = Math.round(8 * miniScale * scale);
+  // maxW 是 quote 文本的实际可用宽度 = contentWidth - innerPad*2（和 drawQuote 保持一致）
+  const maxW = contentWidth - innerPad * 2;
+  const emojiSize = Math.round(fontSize * miniScale * 1.2);
+  const fragments = parseFragments(quote.content || '');
+  const lines = wrapTextFragments(ctx, fragments, maxW, emojiSize);
+  const visibleLines = Math.min(lines.length, 2);
+  const lineH = Math.round(fontSize * miniScale * 1.2);
+
+  return innerPad + lineH + visibleLines * lineH + innerPad + Math.round(4 * scale);
+}
+
 // ============================================================================
 // 核心修复 1: 符合 Unicode Line Break Algorithm 的智能换行
 // 参考 CSS word-break: break-word 行为
@@ -43,7 +142,7 @@ function getSystemMessageStyleForCanvas(type?: string): { bg: string; color: str
 interface TextFragment {
   type: 'text' | 'emoji';
   content: string;
-  emojiUrl?: string;
+  emojiUnicode?: string;
 }
 
 function parseFragments(content: string): TextFragment[] {
@@ -53,24 +152,21 @@ function parseFragments(content: string): TextFragment[] {
   let match;
 
   while ((match = emojiPattern.exec(content)) !== null) {
-    // Text before emoji
     if (match.index > lastIndex) {
       const text = content.slice(lastIndex, match.index);
       if (text) fragments.push({ type: 'text', content: text });
     }
 
     const emoji = EMOJI_MAP.get(match[0]);
-    if (emoji) {
-      fragments.push({ type: 'emoji', content: match[0], emojiUrl: emoji.url });
+    if (emoji && emoji.unicode) {
+      fragments.push({ type: 'emoji', content: match[0], emojiUnicode: emoji.unicode });
     } else {
-      // Unknown "[xxx]" pattern, treat as text
       fragments.push({ type: 'text', content: match[0] });
     }
 
     lastIndex = match.index + match[0].length;
   }
 
-  // Remaining text
   if (lastIndex < content.length) {
     const text = content.slice(lastIndex);
     if (text) fragments.push({ type: 'text', content: text });
@@ -82,52 +178,6 @@ function parseFragments(content: string): TextFragment[] {
 // Measure a string's width using Canvas text API
 function measureTextWidth(ctx: CanvasRenderingContext2D, text: string): number {
   return ctx.measureText(text).width;
-}
-
-// 计算文本的行数（与 wrapTextFragments 保持一致的换行逻辑）
-function countTextLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number, fontFamily: string): number {
-  if (!text) return 1;
-  
-  ctx.font = `${fontSize}px "${fontFamily}"`;
-  
-  const isChinese = /[\u4e00-\u9fa5]/.test(text);
-  
-  if (isChinese || !text.includes(' ')) {
-    // 中文或无空格文本：按字符换行
-    let lineCount = 1;
-    let part = '';
-    
-    for (const char of text) {
-      const newWidth = measureTextWidth(ctx, part + char);
-      if (newWidth > maxWidth && part) {
-        lineCount++;
-        part = char;
-      } else {
-        part += char;
-      }
-    }
-    
-    return lineCount;
-  } else {
-    // 英文文本：按单词换行
-    const words = text.split(' ');
-    let lineCount = 1;
-    let currentLineWidth = 0;
-    
-    for (const word of words) {
-      const wordWidth = measureTextWidth(ctx, word);
-      const spaceWidth = measureTextWidth(ctx, ' ');
-      
-      if (currentLineWidth + wordWidth > maxWidth && currentLineWidth > 0) {
-        lineCount++;
-        currentLineWidth = wordWidth;
-      } else {
-        currentLineWidth += wordWidth + spaceWidth;
-      }
-    }
-    
-    return lineCount;
-  }
 }
 
 // Wrap text - 按单词换行（英文保持单词完整，中文按字符换行）
@@ -156,65 +206,35 @@ function wrapTextFragments(
 
     const text = fragment.content;
     const isChinese = /[\u4e00-\u9fa5]/.test(text);
-    
+
     if (isChinese || !text.includes(' ')) {
       // 中文或无空格文本：按字符换行
-      let part = '';
-      
       for (const char of text) {
-        const newWidth = measureTextWidth(ctx, part + char);
-        
-        if (newWidth > maxWidth && part) {
-          currentLine.push({ type: 'text', content: part });
+        const charWidth = measureTextWidth(ctx, char);
+        if (currentLineWidth + charWidth > maxWidth && currentLine.length > 0) {
           lines.push(currentLine);
           currentLine = [];
           currentLineWidth = 0;
-          part = char;
-        } else {
-          part += char;
         }
-      }
-      
-      if (part) {
-        currentLine.push({ type: 'text', content: part });
-        currentLineWidth = measureTextWidth(ctx, part);
+        currentLine.push({ type: 'text', content: char });
+        currentLineWidth += charWidth;
       }
     } else {
-      // 英文文本：按单词换行
+      // 英文文本：按单词换行（单词不拆分）
       const words = text.split(' ');
-      
-      for (const word of words) {
-        const wordWidth = measureTextWidth(ctx, word);
-        
+      for (let wi = 0; wi < words.length; wi++) {
+        const word = words[wi];
+        // 非最后一个单词后面要加空格
+        const wordDisplay = wi < words.length - 1 ? word + ' ' : word;
+        const wordWidth = measureTextWidth(ctx, wordDisplay);
+
         if (currentLineWidth + wordWidth > maxWidth && currentLine.length > 0) {
           lines.push(currentLine);
           currentLine = [];
           currentLineWidth = 0;
         }
-        
-        if (wordWidth > maxWidth) {
-          // 单词本身超过宽度，按字符换行
-          let part = '';
-          for (const char of word) {
-            const charWidth = measureTextWidth(ctx, part + char);
-            if (charWidth > maxWidth && part) {
-              currentLine.push({ type: 'text', content: part });
-              lines.push(currentLine);
-              currentLine = [];
-              currentLineWidth = 0;
-              part = char;
-            } else {
-              part += char;
-            }
-          }
-          if (part) {
-            currentLine.push({ type: 'text', content: part });
-            currentLineWidth += measureTextWidth(ctx, part);
-          }
-        } else {
-          currentLine.push({ type: 'text', content: word });
-          currentLineWidth += wordWidth + measureTextWidth(ctx, ' '); // 空格宽度
-        }
+        currentLine.push({ type: 'text', content: wordDisplay });
+        currentLineWidth += wordWidth;
       }
     }
   }
@@ -226,6 +246,22 @@ function wrapTextFragments(
   return lines.length > 0 ? lines : [[]];
 }
 
+export function calculateVoiceBubbleHeight(
+  ctx: CanvasRenderingContext2D,
+  voiceText: string,
+  bubbleWidth: number,
+  bubblePaddingH: number,
+  emojiSize: number,
+  lineHeightPx: number,
+  voiceBubbleHeight: number,
+  voiceTextPadding: number,
+): number {
+  const textFragments = parseFragments(voiceText);
+  const textLines = wrapTextFragments(ctx, textFragments, bubbleWidth - bubblePaddingH * 2, emojiSize);
+  const textHeight = textLines.length * lineHeightPx;
+  return voiceBubbleHeight + textHeight + voiceTextPadding * 2;
+}
+
 export interface RenderOptions {
   width: number;
   height: number;
@@ -234,74 +270,17 @@ export interface RenderOptions {
   messages: Message[];
   users: UserProfile[];
   scale?: number;
-  /** 预加载好的 emoji 图片缓存（由调用方同步预加载后传入）*/
-  emojiCache?: Map<string, HTMLImageElement>;
   /** 预加载好的消息图片缓存（由调用方异步预加载后传入）*/
   imageCache?: Map<string, HTMLImageElement>;
   /** 深色模式 */
   darkMode?: boolean;
 }
 
-/** 同步预加载一组图片（通过 XHR），返回 Map */
-function preloadImagesSync(urls: string[]): Map<string, HTMLImageElement> {
-  const cache = new Map<string, HTMLImageElement>();
-  for (const url of urls) {
-    if (cache.has(url)) continue;
-    try {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      // 使用同步 XHR（图片较小，加载很快）
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url, false); // false = synchronous
-      xhr.send();
-      if (xhr.status === 200) {
-        img.src = url;
-        cache.set(url, img);
-      }
-      // 忽略 404 等错误，不打印控制台
-    } catch {
-      // 忽略加载失败
-    }
-  }
-  return cache;
-}
-
-/** 预加载所有微信表情图片（一次性缓存，供整个会话使用）*/
-let globalEmojiCache: Map<string, HTMLImageElement> | null = null;
-function getGlobalEmojiCache(): Map<string, HTMLImageElement> {
-  if (globalEmojiCache) return globalEmojiCache;
-  
-  // 检查第一个 URL 是否有效，如果无效则跳过预加载
-  const urls = wechatEmojis.map(e => e.url);
-  if (urls.length > 0) {
-    // 只预加载第一个 URL 来检查是否有效
-    try {
-      const testXhr = new XMLHttpRequest();
-      testXhr.open('HEAD', urls[0], false);
-      testXhr.send(null); // 传递 null 作为参数
-      if (testXhr.status !== 200) {
-        // 如果第一个 URL 无效，返回空缓存
-        globalEmojiCache = new Map();
-        return globalEmojiCache;
-      }
-    } catch {
-      // 如果请求失败，返回空缓存
-      globalEmojiCache = new Map();
-      return globalEmojiCache;
-    }
-  }
-  
-  globalEmojiCache = preloadImagesSync(urls);
-  return globalEmojiCache;
-}
-
 export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOptions): void {
-  const { width, height, styles, title, messages, users, emojiCache, imageCache, darkMode = false, scale: customScale } = options;
+  const { width, height, styles, title, messages, users, imageCache, darkMode = false, scale: customScale } = options;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // 使用传入的缓存或全局缓存
-  const emojiImgCache = emojiCache ?? getGlobalEmojiCache();
   const msgImageCache = imageCache ?? new Map<string, HTMLImageElement>();
 
   const userAvatarMap = new Map<string, string>();
@@ -341,46 +320,103 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const senderNameHeight = avatarSize * senderNameHeightRatio;
   
   // 特殊消息的固定高度（按比例缩放）
-  const redPacketHeight = Math.round(102 * scale);
-  const transferHeight = Math.round(120 * scale);
+  const redPacketHeight = Math.round(100 * scale);
+  const redPacketWidth = Math.round(200 * scale);
+  const transferHeight = Math.round(100 * scale);
+  const transferWidth = Math.round(200 * scale);
   const voiceBubbleHeight = Math.round(40 * scale);
   const imageBubbleHeight = Math.round(200 * scale);
+  const imageWidth = Math.round(200 * scale);
   
   // 行高在循环外计算一次
   const lineHeightPx = fontSize * lineHeightRatio;
+  const voiceTextFontSize = Math.round(fontSize * 0.9);
+  const voiceTextLineHeightPx = Math.round(voiceTextFontSize * 1.5);
+  const voiceTextPadding = Math.round(4 * scale);
   
-  const messageData = messages.map(msg => {
-    const fragments = parseFragments(msg.content);
-    const lines = wrapTextFragments(ctx, fragments, maxBubbleWidth - bubblePaddingH * 2, emojiSize);
-    const textHeight = lines.length * lineHeightPx;
-    
-    // 特殊消息使用固定高度，普通消息使用文字高度
+const messageData = messages.map(msg => {
+    let bubbleWidth: number;
     let bubbleHeight: number;
+    let fragments: TextFragment[] = [];
+    let textHeight = 0;
+    let quoteBlockHeight = 0;
+
     if (msg.type === 'redpacket') {
-      bubbleHeight = redPacketHeight;
+      bubbleWidth = redPacketWidth;
+      const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+      quoteBlockHeight = msg.quote ? getQuoteBlockHeight(ctx, msg.quote, textContentWidth, fontSize, scale) : 0;
+      bubbleHeight = redPacketHeight + quoteBlockHeight;
     } else if (msg.type === 'transfer') {
-      bubbleHeight = transferHeight;
+      bubbleWidth = transferWidth;
+      const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+      quoteBlockHeight = msg.quote ? getQuoteBlockHeight(ctx, msg.quote, textContentWidth, fontSize, scale) : 0;
+      bubbleHeight = transferHeight + quoteBlockHeight;
     } else if (msg.type === 'voice' && msg.voice) {
-      bubbleHeight = voiceBubbleHeight;
+      const iconArea = Math.round(16 * scale);
+      const durationArea = Math.round(40 * scale);
+      const waveformArea = Math.max(Math.round(60 * scale), Math.round((msg.voice.duration || 5) * 8 * scale));
+      const voiceControlWidth = bubblePaddingH + iconArea + bubblePaddingH + waveformArea + durationArea + bubblePaddingH;
+      bubbleWidth = Math.min(voiceControlWidth, maxBubbleWidth);
+
+      if (msg.voice.text) {
+        const voiceTextFragments = parseFragments(msg.voice.text);
+        const baseWidth = bubbleWidth - bubblePaddingH * 2;
+        const voiceTextLinesPreview = wrapTextFragments(ctx, voiceTextFragments, baseWidth, emojiSize);
+        let textRequiredWidth = maxBubbleWidth;
+        if (voiceTextLinesPreview.length === 1) {
+          let measured = 0;
+          for (const frag of voiceTextFragments) {
+            if (frag.type === 'emoji') measured += emojiSize + 2;
+            else measured += measureTextWidth(ctx, frag.content);
+          }
+          textRequiredWidth = Math.min(measured + bubblePaddingH * 2, maxBubbleWidth);
+        }
+        bubbleWidth = Math.min(Math.max(voiceControlWidth, textRequiredWidth), maxBubbleWidth);
+        const actualTextContentWidth = bubbleWidth - bubblePaddingH * 2;
+        const wrappedTextLines = wrapTextFragments(ctx, voiceTextFragments, actualTextContentWidth, emojiSize);
+        textHeight = wrappedTextLines.length * voiceTextLineHeightPx;
+        quoteBlockHeight = msg.quote ? getQuoteBlockHeight(ctx, msg.quote, actualTextContentWidth, fontSize, scale) : 0;
+        bubbleHeight = voiceBubbleHeight + textHeight + voiceTextPadding * 2 + quoteBlockHeight;
+      } else {
+        bubbleWidth = Math.min(voiceControlWidth, maxBubbleWidth);
+        quoteBlockHeight = msg.quote ? getQuoteBlockHeight(ctx, msg.quote, bubbleWidth - bubblePaddingH * 2, fontSize, scale) : 0;
+        bubbleHeight = voiceBubbleHeight + quoteBlockHeight;
+      }
     } else if (msg.type === 'image') {
-      bubbleHeight = imageBubbleHeight;
+      bubbleWidth = imageWidth;
+      quoteBlockHeight = msg.quote ? getQuoteBlockHeight(ctx, msg.quote, bubbleWidth - bubblePaddingH * 2, fontSize, scale) : 0;
+      bubbleHeight = imageBubbleHeight + quoteBlockHeight;
+    } else if (msg.type === 'file') {
+      bubbleWidth = Math.round(220 * scale);
+      fragments = parseFragments(msg.content || '');
+      const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+      textHeight = textContentWidth > 0 ? 1 : 0; // 文件消息标题固定单行显示
+      quoteBlockHeight = msg.quote ? getQuoteBlockHeight(ctx, msg.quote, textContentWidth, fontSize, scale) : 0;
+      bubbleHeight = Math.round(64 * scale) + quoteBlockHeight;
     } else {
-      bubbleHeight = textHeight + bubblePaddingV * 2;
+      // 文字消息：先用 maxBubbleWidth 估算最大行宽，确定气泡宽度
+      fragments = parseFragments(msg.content || '');
+      const previewLines = wrapTextFragments(ctx, fragments, maxBubbleWidth - bubblePaddingH * 2, emojiSize);
+      let previewMaxLineWidth = 0;
+      for (const line of previewLines) {
+        let w = 0;
+        for (const frag of line) {
+          if (frag.type === 'emoji') w += emojiSize + 2;
+          else w += measureTextWidth(ctx, frag.content);
+        }
+        if (w > previewMaxLineWidth) previewMaxLineWidth = w;
+      }
+      bubbleWidth = Math.min(previewMaxLineWidth + bubblePaddingH * 2, maxBubbleWidth);
+
+      const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+      quoteBlockHeight = msg.quote ? getQuoteBlockHeight(ctx, msg.quote, textContentWidth, fontSize, scale) : 0;
+      // 气泡高度用估算值（maxBubbleWidth 换行的行数），渲染阶段会重新换行
+      textHeight = previewLines.length * lineHeightPx;
+      bubbleHeight = textHeight + bubblePaddingV * 2 + quoteBlockHeight;
     }
 
-    return { msg, fragments, lines, bubbleHeight };
+    return { msg, fragments, bubbleWidth, bubbleHeight };
   });
-
-  // 第一次计算：估算语音消息高度（用于设置 canvas 大小）
-  for (const data of messageData) {
-    if (data.msg.type === 'voice' && data.msg.voice && data.msg.voice.text) {
-      const voiceText = data.msg.voice.text;
-      // 估算：假设每行约 15 字符
-      const estimatedLines = Math.ceil(voiceText.length / 15);
-      const estimatedHeight = voiceBubbleHeight + estimatedLines * lineHeightPx;
-      data.bubbleHeight = estimatedHeight;
-    }
-  }
 
   // Calculate total height needed
   let totalContentHeight = contentPadding;
@@ -492,8 +528,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
   const senderNameHeightPx = avatarSize * senderNameHeightRatio;
 
   for (const data of messageData) {
-    const { msg, lines } = data;
-    const bubbleHeight = data.bubbleHeight;
+    const { msg } = data;
     const isUser = msg.role === 'user';
     // 深色模式下的气泡背景和文字颜色
     const bubbleBg = darkMode 
@@ -534,7 +569,9 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     const avatarY = y;
 
     // Draw avatar
-    drawAvatar(ctx, avatarX, avatarY, avatarSize, msg.sender);
+    const avatarUrl = userAvatarMap.get(msg.sender);
+    const cachedAvatar = avatarUrl ? msgImageCache.get(`avatar:${msg.sender}`) : undefined;
+    drawAvatar(ctx, avatarX, avatarY, avatarSize, msg.sender, cachedAvatar?.src || avatarUrl, msgImageCache);
 
     // ============================================================================
     // 布局结构（与 CSS 预览一致）：
@@ -559,72 +596,13 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     // 在计算文字宽度前设置 fontSize，确保与渲染时的字体一致
     ctx.font = `${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
     
-    // Bubble dimensions - 气泡从用户名下方开始
-    const maxLineWidth = Math.max(
-      ...lines.map(line => {
-        let w = 0;
-        for (const frag of line) {
-          if (frag.type === 'emoji') w += emojiSize + 2;
-          else w += measureTextWidth(ctx, frag.content);
-        }
-        return w;
-      })
-    );
-    
-    // 红包消息的固定宽度
-    const redPacketWidth = Math.round(180 * scale);
-    // 转账消息的最小宽度
-    const transferMinWidth = Math.round(180 * scale);
-    // 图片消息的固定宽度（正方形）
-    const imageWidth = msg.type === 'image' ? Math.round(200 * scale) : 0;
-    
-    let actualMaxLineWidth: number;
-    if (msg.type === 'redpacket') {
-      actualMaxLineWidth = redPacketWidth;
-    } else if (msg.type === 'transfer') {
-      actualMaxLineWidth = Math.max(maxLineWidth, transferMinWidth);
-    } else if (msg.type === 'voice' && msg.voice) {
-      // 语音消息宽度计算：图标 + 波形(可变) + 时长 + padding（都按scale缩放）
-      const iconArea = Math.round(16 * scale);
-      const durationArea = Math.round(40 * scale);
-      const waveformArea = Math.max(Math.round(60 * scale), Math.round((msg.voice.duration || 5) * 8 * scale));
-      const voiceControlWidth = bubblePaddingH + iconArea + bubblePaddingH + waveformArea + durationArea + bubblePaddingH;
-      
-      // 如果有文字，估算文字需要的宽度
-      let textWidth = 0;
-      if (msg.voice.text) {
-        const estimatedCharsPerLine = Math.floor((maxBubbleWidth - bubblePaddingH * 2) / (fontSize * 0.6));
-        const lines = Math.ceil(msg.voice.text.length / estimatedCharsPerLine);
-        if (lines === 1) {
-          ctx.font = `${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
-          textWidth = Math.min(ctx.measureText(msg.voice.text).width + bubblePaddingH * 2, maxBubbleWidth);
-        } else {
-          textWidth = maxBubbleWidth;
-        }
-      }
-      
-      actualMaxLineWidth = Math.max(voiceControlWidth, textWidth);
-    } else if (msg.type === 'image') {
-      actualMaxLineWidth = imageWidth;
-    } else {
-      actualMaxLineWidth = maxLineWidth;
-    }
-    
-    const bubbleWidth = Math.min(actualMaxLineWidth + bubblePaddingH * 2, maxBubbleWidth);
+    // Bubble dimensions - 使用 messageData 中的计算结果
+    const bubbleWidth = data.bubbleWidth;
     const bubbleX = isUser
       ? avatarX - gap - bubbleWidth
       : avatarX + gap + avatarSize;
     const bubbleY = y + senderNameHeightPx;
-    
-    // 语音消息：如果有文字，计算实际高度
-    const effectiveBubbleHeight = (msg.type === 'voice' && msg.voice && msg.voice.text)
-      ? (() => {
-        const voiceText = msg.voice.text;
-        const textContentWidth = bubbleWidth - bubblePaddingH * 2;
-        const voiceLineCount = countTextLines(ctx, voiceText, textContentWidth, fontSize, styles.fontFamily);
-        return Math.round(40 * scale) + voiceLineCount * lineHeightPx;
-      })()
-      : bubbleHeight;
+    const bubbleHeight = data.bubbleHeight;
     
     // ============================================================================
     // 核心修复 3: 添加 clip() 防止文字溢出（仅对普通文字消息）
@@ -634,7 +612,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
     
     // 只有普通消息才使用 clip，特殊消息不使用
     if (!isSpecialMessage) {
-      drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, effectiveBubbleHeight, bubbleRadius, bubbleBg);
+      drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius, bubbleBg);
       ctx.clip();
     }
 
@@ -645,15 +623,14 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const redPacket = msg.redPacket;
       
       // 计算各部分高度（按比例缩放）
-      const iconSize = Math.round(48 * scale);
-      const bodyPadding = Math.round(12 * scale);
-      const footerHeight = Math.round(32 * scale);
+      const iconSize = Math.round(42 * scale);
+      const bodyPaddingH = Math.round(12 * scale);
+      const footerHeight = Math.round(22 * scale);
       const bodyHeight = bubbleHeight - footerHeight;
-      const iconFontSize = Math.round(iconSize * 0.5);
-      const titleFontSize = Math.round(16 * scale);
+      const titleFontSize = Math.round(15 * scale);
       const contentFontSize = Math.round(12 * scale);
       const footerFontSize = Math.round(11 * scale);
-      
+
       // 1. 绘制主体区域（橙红色渐变）
       const gradient = ctx.createLinearGradient(bubbleX, bubbleY, bubbleX + bubbleWidth, bubbleY + bodyHeight);
       gradient.addColorStop(0, '#FFB347');
@@ -673,32 +650,37 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fill();
       
       // 2. 绘制钱袋图标（黄色圆形）
-      const iconX = bubbleX + bodyPadding;
+      const iconX = bubbleX + bodyPaddingH;
       const iconY = bubbleY + (bodyHeight - iconSize) / 2;
-      ctx.fillStyle = '#FFD700';
+      ctx.fillStyle = '#ffd700';
       ctx.beginPath();
       ctx.arc(iconX + iconSize/2, iconY + iconSize/2, iconSize/2, 0, Math.PI * 2);
       ctx.fill();
-      
+
       // 钱袋图标内文字
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${iconFontSize}px sans-serif`;
+      ctx.font = `bold ${Math.round(iconSize * 0.5)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('🧧', iconX + iconSize/2, iconY + iconSize/2);
-      
-      // 3. 绘制标题"红包"（白色，加粗）
-      const contentX = iconX + iconSize + Math.round(12 * scale);
+
+      // 3. 绘制标题"微信红包"（白色，加粗）
+      const contentX = iconX + iconSize + Math.round(10 * scale);
       ctx.fillStyle = '#fff';
       ctx.font = `bold ${titleFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('红包', contentX, iconY + Math.round(6 * scale));
+      ctx.fillText('微信红包', contentX, iconY + Math.round(2 * scale));
+
+      // 4. 绘制祝福语（白色，小字）
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = `${contentFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.fillText(redPacket.greeting || '恭喜发财，大吉大利', contentX, iconY + titleFontSize + Math.round(3 * scale));
       
       // 4. 绘制祝福语（白色，小字）
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.font = `${contentFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
-      ctx.fillText(redPacket.greeting, contentX, iconY + titleFontSize + Math.round(10 * scale));
+      ctx.fillText(redPacket.greeting, contentX, iconY + titleFontSize + Math.round(3 * scale));
       
       // 5. 绘制底部状态栏（白色背景）
       ctx.fillStyle = 'rgba(255,255,255,0.95)';
@@ -725,16 +707,16 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const transfer = msg.transfer;
       
       // 计算各部分高度（按比例缩放）
-      const iconSize = Math.round(44 * scale);
-      const bodyPadding = Math.round(12 * scale);
-      const footerHeight = Math.round(32 * scale);
+      const iconSize = Math.round(42 * scale);
+      const bodyPaddingH = Math.round(12 * scale);
+      const footerHeight = Math.round(22 * scale);
       const bodyHeight = bubbleHeight - footerHeight;
-      const titleFontSize = Math.round(16 * scale);
-      const amountFontSize = Math.round(18 * scale);
+      const titleFontSize = Math.round(14 * scale);
+      const amountFontSize = Math.round(20 * scale);
       const footerFontSize = Math.round(11 * scale);
-      
-      // 1. 绘制主体区域（灰色背景）
-      ctx.fillStyle = '#f5f5f5';
+
+      // 1. 绘制主体区域（浅绿色背景）
+      ctx.fillStyle = '#e8f5e9';
       ctx.beginPath();
       ctx.moveTo(bubbleX + bubbleRadius, bubbleY);
       ctx.lineTo(bubbleX + bubbleWidth - bubbleRadius, bubbleY);
@@ -747,51 +729,51 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       ctx.fill();
       
       // 2. 绘制转账图标（绿色圆形）
-      const iconX = bubbleX + bodyPadding;
+      const iconX = bubbleX + bodyPaddingH;
       const iconY = bubbleY + (bodyHeight - iconSize) / 2;
-      ctx.fillStyle = '#07c160'; // 微信绿
+      ctx.fillStyle = '#07c160';
       ctx.beginPath();
       ctx.arc(iconX + iconSize/2, iconY + iconSize/2, iconSize/2, 0, Math.PI * 2);
       ctx.fill();
-      
+
       // 图标内文字 "¥"
       ctx.fillStyle = '#fff';
       ctx.font = `bold ${Math.round(iconSize * 0.45)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('¥', iconX + iconSize/2, iconY + iconSize/2);
-      
+
       // 3. 绘制标题"转账"（深色）
-      const contentX = iconX + iconSize + Math.round(12 * scale);
+      const contentX = iconX + iconSize + Math.round(10 * scale);
       ctx.fillStyle = '#333';
-      ctx.font = `bold ${titleFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.font = `${titleFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('转账', contentX, iconY + Math.round(4 * scale));
-      
+      ctx.fillText('转账', contentX, iconY);
+
       // 4. 绘制金额（大号深色）
       ctx.fillStyle = '#333';
       ctx.font = `bold ${amountFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
-      ctx.fillText(`¥${(transfer.amount / 100).toFixed(2)}`, contentX, iconY + titleFontSize + Math.round(10 * scale));
+      ctx.fillText(`¥${(transfer.amount / 100).toFixed(2)}`, contentX, iconY + titleFontSize + Math.round(2 * scale));
       
       // 5. 绘制底部状态栏（白色背景）
       ctx.fillStyle = '#fff';
       ctx.fillRect(bubbleX, bubbleY + bodyHeight, bubbleWidth, footerHeight);
       
       // 分割线
-      ctx.strokeStyle = '#e0e0e0';
+      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(bubbleX, bubbleY + bodyHeight);
       ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bodyHeight);
       ctx.stroke();
-      
+
       // 状态文字（绿色表示已收款，灰色表示待收款）
       ctx.fillStyle = transfer.isReceived ? '#07c160' : '#999';
       ctx.font = `${footerFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const statusText = transfer.isReceived ? '已收款' : '待收款';
+      const statusText = transfer.isReceived ? '已收款' : '请确认收款';
       ctx.fillText(statusText, bubbleX + bubbleWidth / 2, bubbleY + bodyHeight + footerHeight / 2);
       
     } else if (msg.type === 'voice' && msg.voice) {
@@ -800,7 +782,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       const waveHeight = Math.round(24 * scale);
       const barWidth = Math.max(1, Math.round(3 * scale));
       const barGap = Math.max(1, Math.round(2 * scale));
-      const waveAreaHeight = Math.round(40 * scale);
+      const waveAreaHeight = voiceBubbleHeight;
       const durationFontSize = Math.round(12 * scale);
       
       // 时长文字宽度（估算）
@@ -818,11 +800,8 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
         waveformData.push(Math.sin(i * 0.5) * 0.5 + 0.5);
       }
       
-      // 语音气泡总高度
-      const voiceBubbleHeight = effectiveBubbleHeight;
-      
       // 绘制气泡背景
-      drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, voiceBubbleHeight, bubbleRadius, bubbleBg);
+      drawBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius, bubbleBg);
       
       // 计算波形区域的左右边界
       const waveLeftX = bubbleX + bubblePaddingH + iconSize + bubblePaddingH;
@@ -866,44 +845,29 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       if (voice.text) {
         const textColor = darkMode ? '#ffffff' : bubbleColor;
         ctx.fillStyle = textColor;
-        ctx.textBaseline = 'middle';
+        ctx.textBaseline = 'top';
+        ctx.font = `${voiceTextFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
         
         const textContentWidth = bubbleWidth - bubblePaddingH * 2;
-        const textTopPadding = Math.round(6 * scale);
-        const textBottomPadding = Math.round(6 * scale);
+        const textTopPadding = voiceTextPadding;
         
         const textFragments = parseFragments(voice.text);
         const textLines = wrapTextFragments(ctx, textFragments, textContentWidth, emojiSize);
-        
-        const textAreaHeight = effectiveBubbleHeight - waveAreaHeight;
-        const totalTextHeight = textLines.length * lineHeightPx;
-        
-        // 计算文字区域可用空间
-        const availableHeight = textAreaHeight - textTopPadding - textBottomPadding;
-        
-        // 根据行数选择布局策略
-        let startY: number;
-        if (textLines.length === 1) {
-          // 单行：垂直居中于可用空间
-          startY = bubbleY + waveAreaHeight + textTopPadding + (availableHeight - totalTextHeight) / 2 + lineHeightPx / 2;
-        } else {
-          // 多行：从顶部开始填满可用空间
-          const multiLineTopPadding = (availableHeight - totalTextHeight) / 2;
-          startY = bubbleY + waveAreaHeight + Math.max(4, multiLineTopPadding) + lineHeightPx / 2;
-        }
+        const startY = bubbleY + waveAreaHeight + textTopPadding;
         
         for (let li = 0; li < textLines.length; li++) {
-          const lineY = startY + lineHeightPx * li;
+          const lineY = startY + voiceTextLineHeightPx * li;
           let xOffset = 0;
           
           for (const frag of textLines[li]) {
             if (frag.type === 'emoji') {
-              const cachedImg = emojiImgCache.get(frag.emojiUrl!);
-              if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-                const emojiY = lineY + (lineHeightPx - emojiSize) / 2;
-                ctx.drawImage(cachedImg, bubbleX + bubblePaddingH + xOffset, emojiY, emojiSize, emojiSize);
+              if (frag.emojiUnicode) {
+                ctx.font = `${emojiSize}px sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.fillText(frag.emojiUnicode, bubbleX + bubblePaddingH + xOffset, lineY);
+                xOffset += emojiSize + 2;
+                ctx.font = `${voiceTextFontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
               }
-              xOffset += emojiSize + 2;
             } else {
               const textX = bubbleX + bubblePaddingH + xOffset;
               ctx.textAlign = 'left';
@@ -944,30 +908,19 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       
       // 绘制图片（如果有URL）
       if (msg.image.url) {
-        // 优先使用缓存的图片
         const cachedImg = msgImageCache.get(msg.image.url);
-        
         if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
           ctx.drawImage(cachedImg, bubbleX + imgPadding, bubbleY + imgPadding, imgSize, imgSize);
         } else {
-          // 尝试直接加载
-          const tempImg = new Image();
-          tempImg.crossOrigin = 'anonymous';
-          tempImg.src = msg.image.url;
-          
-          if (tempImg.complete && tempImg.naturalWidth > 0) {
-            ctx.drawImage(tempImg, bubbleX + imgPadding, bubbleY + imgPadding, imgSize, imgSize);
-          } else {
-            // 图片未加载，显示图片图标
-            ctx.fillStyle = '#ccc';
-            ctx.beginPath();
-            ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconOuterRadius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconInnerRadius, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          // 图片未加载或不可用，显示图片图标
+          ctx.fillStyle = '#ccc';
+          ctx.beginPath();
+          ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconOuterRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(bubbleX + bubbleWidth / 2, bubbleY + imgBubbleHeight / 2, iconInnerRadius, 0, Math.PI * 2);
+          ctx.fill();
         }
       } else {
         // 没有图片URL，显示图片图标
@@ -983,67 +936,111 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
       
       // 恢复裁剪状态
       ctx.restore();
+
+    } else if (msg.type === 'file' && msg.file) {
+      // 绘制文件消息
+      ctx.restore(); // 先恢复 clip
+      ctx.save();
       
+      // 先绘制引用块
+      let quoteOffsetY = 0;
+      if (msg.quote) {
+        quoteOffsetY = drawQuote(ctx, bubbleX + bubblePaddingH, bubbleY + bubblePaddingV, bubbleWidth - bubblePaddingH * 2, msg.quote, fontSize, scale, styles.fontFamily);
+      }
+      
+      const fileH = Math.round(64 * scale);
+      const fileR = Math.round(10 * scale);
+      ctx.beginPath();
+      ctx.moveTo(bubbleX + fileR, bubbleY + quoteOffsetY); ctx.lineTo(bubbleX + bubbleWidth - fileR, bubbleY + quoteOffsetY);
+      ctx.arcTo(bubbleX + bubbleWidth, bubbleY + quoteOffsetY, bubbleX + bubbleWidth, bubbleY + quoteOffsetY + fileR, fileR);
+      ctx.lineTo(bubbleX + bubbleWidth, bubbleY + quoteOffsetY + fileH - fileR);
+      ctx.arcTo(bubbleX + bubbleWidth, bubbleY + quoteOffsetY + fileH, bubbleX + bubbleWidth - fileR, bubbleY + quoteOffsetY + fileH, fileR);
+      ctx.lineTo(bubbleX + fileR, bubbleY + quoteOffsetY + fileH);
+      ctx.arcTo(bubbleX, bubbleY + quoteOffsetY + fileH, bubbleX, bubbleY + quoteOffsetY + fileH - fileR, fileR);
+      ctx.lineTo(bubbleX, bubbleY + quoteOffsetY + fileR);
+      ctx.arcTo(bubbleX, bubbleY + quoteOffsetY, bubbleX + fileR, bubbleY + quoteOffsetY, fileR);
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF'; ctx.fill();
+      ctx.strokeStyle = '#E0E0E0'; ctx.lineWidth = 1; ctx.stroke();
+
+      const iconSize = Math.round(36 * scale);
+      const iconX = bubbleX + bubblePaddingH;
+      const iconY = bubbleY + quoteOffsetY + (fileH - iconSize) / 2;
+      const ext = (msg.file.type || '').toUpperCase();
+      const iconColor = ext === 'PDF' ? '#E53935' : ext === 'DOCX' || ext === 'DOC' ? '#1565C0' : ext === 'XLSX' || ext === 'XLS' ? '#2E7D32' : '#757575';
+      ctx.fillStyle = iconColor;
+      ctx.beginPath(); ctx.roundRect(iconX, iconY, iconSize, iconSize, Math.round(4 * scale)); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.round(9 * scale)}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(ext.slice(0, 4), iconX + iconSize / 2, iconY + iconSize / 2);
+
+      const textX = iconX + iconSize + Math.round(10 * scale);
+      const maxTextW = bubbleWidth - (textX - bubbleX) - bubblePaddingH;
+      ctx.fillStyle = '#1A1A1A';
+      ctx.font = `${Math.round(13 * scale)}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      let fname = msg.file.name;
+      while (fname.length > 1 && ctx.measureText(fname).width > maxTextW) fname = fname.slice(0, -1);
+      ctx.fillText(fname, textX, iconY + Math.round(4 * scale));
+      ctx.fillStyle = '#888';
+      ctx.font = `${Math.round(11 * scale)}px "${styles.fontFamily.replace(/"/g, '')}"`;
+      ctx.fillText(msg.file.size, textX, iconY + Math.round(13 * scale) + Math.round(8 * scale));
+
     } else {
-      // 绘制普通文字消息
-      // Draw text + emoji content
+      // 绘制引用块
+      const actualQuoteHeight = msg.quote
+        ? drawQuote(
+            ctx,
+            bubbleX + bubblePaddingH,
+            bubbleY + bubblePaddingV,
+            bubbleWidth - bubblePaddingH * 2,
+            msg.quote,
+            fontSize,
+            scale,
+            styles.fontFamily
+          )
+        : 0;
+
+      // 绘制文字内容（紧接在引用块下方，不是在气泡内居中）
       ctx.fillStyle = bubbleColor;
       ctx.textBaseline = 'middle';
+      ctx.font = `${fontSize}px "${styles.fontFamily.replace(/"/g, '')}"`;
 
-      // 文字垂直居中
-      const totalTextHeight = lines.length * lineHeightPx;
-      const startY = bubbleY + (bubbleHeight - totalTextHeight) / 2 + lineHeightPx / 2;
+      const textContentWidth = bubbleWidth - bubblePaddingH * 2;
+      const textFragments = parseFragments(msg.content || '');
+      const textLines = wrapTextFragments(ctx, textFragments, textContentWidth, emojiSize);
 
-      for (let li = 0; li < lines.length; li++) {
-        // 每行的 Y 坐标 = 起始Y + 行高 * 行号
+      const totalTextHeight = textLines.length * lineHeightPx;
+      let startY: number;
+      if (actualQuoteHeight > 0) {
+        // 有引用：文字在引用块下方的剩余空间内垂直居中
+        const textStartY = bubbleY + bubblePaddingV + actualQuoteHeight;
+        const remainingHeight = bubbleHeight - actualQuoteHeight;
+        startY = textStartY + (remainingHeight - totalTextHeight) / 2 + lineHeightPx / 2;
+      } else {
+        // 无引用：文字在整个气泡内垂直居中（与原始逻辑一致）
+        startY = bubbleY + (bubbleHeight - totalTextHeight) / 2 + lineHeightPx / 2;
+      }
+
+      for (let li = 0; li < textLines.length; li++) {
         const lineY = startY + lineHeightPx * li;
+        let xOffset = 0;
 
-        if (isUser) {
-          // Right-aligned: 先计算整行宽度，再从右向左绘制
-          let lineTotalWidth = 0;
-          for (const frag of lines[li]) {
-            if (frag.type === 'emoji') {
-              lineTotalWidth += emojiSize + 2;
-            } else {
-              lineTotalWidth += measureTextWidth(ctx, frag.content);
-            }
-          }
-          
-          const rightEdgeX = bubbleX + bubbleWidth - bubblePaddingH;
-          let xOffset = rightEdgeX - lineTotalWidth;
-          
-          for (const frag of lines[li]) {
-            if (frag.type === 'emoji') {
-              const cachedImg = emojiImgCache.get(frag.emojiUrl!);
-              if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-                const emojiY = lineY + (lineHeightPx - emojiSize) / 2;
-                ctx.drawImage(cachedImg, xOffset, emojiY, emojiSize, emojiSize);
-              }
-              xOffset += emojiSize + 2;
-            } else {
-              const textWidth = measureTextWidth(ctx, frag.content);
+        for (const frag of textLines[li]) {
+          if (frag.type === 'emoji') {
+            if (frag.emojiUnicode) {
+              ctx.font = `${emojiSize}px sans-serif`;
               ctx.textAlign = 'left';
-              ctx.fillText(frag.content, xOffset, lineY);
-              xOffset += textWidth;
-            }
-          }
-        } else {
-          // Left-aligned
-          let xOffset = 0;
-          for (const frag of lines[li]) {
-            if (frag.type === 'emoji') {
-              const cachedImg = emojiImgCache.get(frag.emojiUrl!);
-              if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-                const emojiY = lineY + (lineHeightPx - emojiSize) / 2;
-                ctx.drawImage(cachedImg, bubbleX + bubblePaddingH + xOffset, emojiY, emojiSize, emojiSize);
-              }
+              ctx.textBaseline = 'middle';
+              ctx.fillText(frag.emojiUnicode, bubbleX + bubblePaddingH + xOffset, lineY);
               xOffset += emojiSize + 2;
-            } else {
-              const textX = bubbleX + bubblePaddingH + xOffset;
-              ctx.textAlign = 'left';
-              ctx.fillText(frag.content, textX, lineY);
-              xOffset += measureTextWidth(ctx, frag.content);
             }
+          } else {
+            const textX = bubbleX + bubblePaddingH + xOffset;
+            ctx.textAlign = 'left';
+            ctx.fillText(frag.content, textX, lineY);
+            xOffset += measureTextWidth(ctx, frag.content);
           }
         }
       }
@@ -1053,7 +1050,7 @@ export function renderChatToCanvas(canvas: HTMLCanvasElement, options: RenderOpt
 
     // Advance y position
     // 行高 = max(头像高度, 用户名高度 + 气泡高度) + 间距
-    const contentHeight = senderNameHeightPx + effectiveBubbleHeight;
+    const contentHeight = senderNameHeightPx + bubbleHeight;
     const currentRowHeight = Math.max(avatarSize, contentHeight) + gap;
     y += currentRowHeight;
   }
@@ -1064,12 +1061,45 @@ function drawAvatar(
   x: number,
   y: number,
   size: number,
-  name: string
+  name: string,
+  avatarUrl?: string,
+  imageCache?: Map<string, HTMLImageElement>
 ): void {
   const centerX = x + size / 2;
   const centerY = y + size / 2;
   const radius = size / 2;
 
+  // 优先从 imageCache 中获取已预加载的头像
+  if (avatarUrl && imageCache) {
+    const cachedImg = imageCache.get(`avatar:${name}`);
+    if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(cachedImg, x, y, size, size);
+      ctx.restore();
+      return;
+    }
+  }
+
+  // 如果有自定义头像 URL，尝试加载并绘制
+  if (avatarUrl) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = avatarUrl;
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, x, y, size, size);
+      ctx.restore();
+      return;
+    }
+  }
+
+  // 使用默认彩色圆形头像
   const color = AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
   ctx.beginPath();
@@ -1110,6 +1140,85 @@ function drawBubble(
   ctx.fill();
 }
 
+function drawMiniFileQuote(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  file: Message['file'],
+  scale: number,
+): void {
+  // 绘制文件背景
+  drawBubble(ctx, x, y, w, h, Math.round(8 * scale), '#FFFFFF');
+  ctx.strokeStyle = '#E0E0E0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+  const pad = Math.round(6 * scale);
+  const iconSize = Math.round(24 * scale);
+  const iconX = x + pad;
+  const iconY = y + (h - iconSize) / 2;
+  const ext = (file?.type || '').toUpperCase();
+  const iconColor = ext === 'PDF' ? '#E53935' : ext === 'DOCX' || ext === 'DOC' ? '#1565C0' : ext === 'XLSX' || ext === 'XLS' ? '#2E7D32' : '#757575';
+  ctx.fillStyle = iconColor;
+  ctx.beginPath();
+  ctx.roundRect(iconX, iconY, iconSize, iconSize, Math.round(3 * scale));
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.round(6 * scale)}px "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ext.slice(0, 4), iconX + iconSize / 2, iconY + iconSize / 2);
+
+  const textX = iconX + iconSize + Math.round(6 * scale);
+  const maxTextW = w - (textX - x) - pad;
+  let fileName = file?.name || '文件';
+  ctx.fillStyle = '#1A1A1A';
+  ctx.font = `${Math.round(9 * scale)}px "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  while (fileName.length > 1 && ctx.measureText(fileName).width > maxTextW) fileName = fileName.slice(0, -1);
+  ctx.fillText(fileName, textX, iconY + Math.round(2 * scale));
+
+  ctx.fillStyle = '#888';
+  ctx.font = `${Math.round(7 * scale)}px "Microsoft YaHei", sans-serif`;
+  ctx.fillText(file?.size || '', textX, iconY + Math.round(12 * scale));
+}
+
+function drawMiniImageQuote(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  image: Message['image'],
+  scale: number,
+): void {
+  const radius = Math.round(12 * scale);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+  ctx.fillStyle = '#e0e0e0';
+  ctx.fillRect(x, y, w, h);
+
+  if (image?.url) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = image.url;
+    if (img.complete && img.naturalWidth > 0) {
+      const imgScale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+      const drawW = img.naturalWidth * imgScale;
+      const drawH = img.naturalHeight * imgScale;
+      ctx.drawImage(img, x + (w - drawW) / 2, y + (h - drawH) / 2, drawW, drawH);
+    }
+  }
+
+  ctx.restore();
+}
+
 export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
@@ -1122,3 +1231,5 @@ export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 export function canvasToDataUrl(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL('image/png');
 }
+
+

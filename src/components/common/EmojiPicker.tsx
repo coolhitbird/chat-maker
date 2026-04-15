@@ -68,16 +68,7 @@ export default function EmojiPicker({ onSelect }: EmojiPickerProps) {
               className="p-1 hover:bg-gray-100 rounded transition-colors text-center"
               title={emoji.name}
             >
-              <img
-                src={emoji.url}
-                alt={emoji.key}
-                className="w-6 h-6 mx-auto object-contain"
-                onError={e => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                }}
-              />
-              <span className="hidden text-xs">{emoji.key}</span>
+              <span className="text-xl">{emoji.unicode || emoji.key}</span>
             </button>
           ))}
         </div>

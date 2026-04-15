@@ -131,9 +131,11 @@ export default function ExportPanel() {
     setIsExporting(true);
     setError('');
     setExportProgress(0);
+    
+    let exporter: Exporter | null = null;
 
     try {
-      const exporter = new Exporter();
+      exporter = new Exporter();
       setStatus('正在加载 FFmpeg...');
       await exporter.init();
 
@@ -152,23 +154,19 @@ export default function ExportPanel() {
         
         await new Promise(resolve => setTimeout(resolve, messageInterval));
 
+        console.log('[ExportPanel] generate frame', frameIndex, 'for message count', visibleMessages.length);
         const blob = await exporter.captureFrameFromHtml(html, settings.width, settings.height, styles.background);
-        await exporter.captureAndSaveFrame(blob, frameIndex);
-        frameIndex++;
-      }
-
-      const finalHtml = generateChatHtml(messages, platformConfig, settings.width, settings.height, project.chatTitle, users);
-      for (let i = 0; i < fps; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1000 / fps));
-        const blob = await exporter.captureFrameFromHtml(finalHtml, settings.width, settings.height, styles.background);
+        console.log('[ExportPanel] captured frame blob', { frameIndex, size: blob.size });
         await exporter.captureAndSaveFrame(blob, frameIndex);
         frameIndex++;
       }
 
       setStatus('正在合成视频...');
       setExportProgress(85);
+      console.log('[ExportPanel] compiling video with frameCount=', frameIndex, 'fps=', fps);
       
       const videoBlob = await exporter.compileVideo(frameIndex, fps);
+      console.log('[ExportPanel] compiled video blob', { size: videoBlob.size });
       
       setStatus('正在下载...');
       const url = URL.createObjectURL(videoBlob);
@@ -186,6 +184,10 @@ export default function ExportPanel() {
       console.error('Export failed:', err);
       setError('导出失败: ' + (err as Error).message);
     } finally {
+      // 清理 FFmpeg 资源
+      if (exporter) {
+        await exporter.terminate();
+      }
       setIsExporting(false);
       setTimeout(() => setStatus(''), 3000);
     }
@@ -230,15 +232,17 @@ export default function ExportPanel() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">视频码率 (kbps)</label>
-              <input
-                type="number"
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">视频码率</label>
+              <select
                 value={settings.videoBitrate}
                 onChange={e => useChatStore.getState().updateSettings({ videoBitrate: Number(e.target.value) })}
-                min="500"
-                max="5000"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
+              >
+                <option value="1">1 Mbps (流畅)</option>
+                <option value="2">2 Mbps (高清)</option>
+                <option value="5">5 Mbps (超清)</option>
+                <option value="8">8 Mbps (原画)</option>
+              </select>
             </div>
           </div>
         )}

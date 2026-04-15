@@ -23,6 +23,23 @@ function scaleStyles(styles: ThemeStyles & { deviceType?: 'mobile' | 'desktop' }
   };
 }
 
+async function waitForImages(container: HTMLElement, timeout = 3000): Promise<void> {
+  const images = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
+  if (images.length === 0) return;
+
+  await Promise.race([
+    Promise.all(images.map(img => new Promise<void>(resolve => {
+      if (img.complete) {
+        resolve();
+        return;
+      }
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    })) ),
+    new Promise<void>(resolve => setTimeout(resolve, timeout)),
+  ]);
+}
+
 // ============================================================================
 // DOM-based Image Export — 保证与 CSS 预览100%一致
 // 原理：创建与预览完全相同的 DOM 结构，用 html2canvas 截图
@@ -114,13 +131,15 @@ export function generateChatHtml(
 
   const title = escapeHtml(chatTitle || config.name);
 
+  const contentHeight = height - headerHeight;
+
   return `
-    <div style="width: ${width}px; height: ${height}px; background-color: ${scaledStyles.background}; display: flex; flex-direction: column; overflow: hidden; font-family: ${scaledStyles.fontFamily};">
-      <div style="height: ${headerHeight}px; background-color: ${scaledStyles.headerBg}; color: ${scaledStyles.headerColor}; display: flex; align-items: center; justify-content: center; font-size: ${scaledStyles.fontSize}px; font-weight: 500;">
-        ${title}
-      </div>
-      <div style="flex: 1; overflow-y: auto; padding: ${scaledStyles.messageGap}px; background-color: ${scaledStyles.background};">
+    <div style="width: ${width}px; height: ${height}px; background-color: ${scaledStyles.background}; position: relative; overflow: hidden; font-family: ${scaledStyles.fontFamily};">
+      <div style="position: absolute; top: ${headerHeight}px; left: 0; width: ${width}px; height: ${contentHeight}px; overflow: hidden; padding: ${scaledStyles.messageGap}px; background-color: ${scaledStyles.background}; box-sizing: border-box;">
         ${messagesHtml}
+      </div>
+      <div style="position: absolute; top: 0; left: 0; width: ${width}px; height: ${headerHeight}px; background-color: ${scaledStyles.headerBg}; color: ${scaledStyles.headerColor}; display: flex; align-items: center; justify-content: center; font-size: ${scaledStyles.fontSize}px; font-weight: 500; z-index: 100;">
+        ${title}
       </div>
     </div>
   `;
@@ -246,6 +265,7 @@ export class Exporter {
     const filename = `frame${String(index).padStart(5, '0')}.png`;
     const arrayBuffer = await blob.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
+    console.log(`[captureAndSaveFrame] frame=${filename}, size=${uint8Array.length} bytes`);
     await this.ffmpeg.writeFile(filename, uint8Array);
   }
 
@@ -254,10 +274,16 @@ export class Exporter {
       throw new Error('FFmpeg not initialized');
     }
 
+    if (frameCount === 0) {
+      throw new Error('没有生成任何帧，无法合成视频');
+    }
+
+    console.log('[compileVideo] frameCount=', frameCount, 'fps=', fps);
+
     await this.ffmpeg.exec([
       '-framerate', String(fps),
-      '-i', 'frame%05d.png',
-      '-c:v', 'libx264',
+      '-start_number', '0',
+      '-i', 'frame%05d.png',      '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',      '-c:v', 'libx264',
       '-pix_fmt', 'yuv420p',
       '-preset', 'fast',
       '-y',
@@ -265,6 +291,7 @@ export class Exporter {
     ]);
 
     const data = await this.ffmpeg.readFile('output.mp4') as Uint8Array;
+    console.log('[compileVideo] output.mp4 size=', data.length);
 
     for (let i = 0; i < frameCount; i++) {
       const filename = `frame${String(i).padStart(5, '0')}.png`;
@@ -275,17 +302,33 @@ export class Exporter {
     return new Blob([data as unknown as BlobPart], { type: 'video/mp4' });
   }
 
+  // 清理 FFmpeg 资源
+  async terminate(): Promise<void> {
+    if (this.ffmpeg) {
+      try {
+        await this.ffmpeg.terminate();
+      } catch (e) {
+        console.warn('[Exporter] terminate error:', e);
+      }
+      this.ffmpeg = null;
+      this.loaded = false;
+    }
+  }
+
   // 使用 html2canvas 截图，与 CSS 预览完全一致
   async captureImage(element: HTMLElement, settings?: ExportSettings): Promise<Blob> {
     const targetWidth = settings?.width || 1080;
     const targetHeight = settings?.height || 1920;
 
-    // Wait for any pending renders
+    // Wait for fonts and image assets to stabilize
     await new Promise(resolve => setTimeout(resolve, 100));
+    await document.fonts.ready;
+    await waitForImages(element);
 
     const canvas = await html2canvas(element, {
       scale: 1,
       useCORS: true,
+      allowTaint: true,
       backgroundColor: null, // transparent background
       width: targetWidth,
       height: targetHeight,
@@ -312,20 +355,24 @@ export class Exporter {
     container.innerHTML = html;
     document.body.appendChild(container);
 
-    // Wait for fonts + images to load
+    // Wait for fonts and images to load
     await document.fonts.ready;
+    await waitForImages(container);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
-      setTimeout(resolve, 100);
+      setTimeout(resolve, 50);
     })));
 
+    console.log('[captureImageFromHtml] capturing HTML to canvas', { width, height, htmlLength: html.length });
     const canvas = await html2canvas(container, {
       scale: 1,
       width,
       height,
       backgroundColor: background,
       useCORS: true,
+      allowTaint: true,
       logging: false,
     });
+    console.log('[captureImageFromHtml] canvas generated', { width: canvas.width, height: canvas.height });
 
     document.body.removeChild(container);
 
@@ -355,6 +402,40 @@ export class Exporter {
   ): Promise<Blob> {
     const canvas = document.createElement('canvas');
     const { renderChatToCanvas, canvasToBlob: canvasToBlobUtil } = await import('./canvasRenderer');
+
+    const imageCache = new Map<string, HTMLImageElement>();
+
+    await Promise.all(users.map(user => {
+      if (!user.avatar) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          imageCache.set(`avatar:${user.name}`, img);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = user.avatar;
+      });
+    }));
+
+    await Promise.all(messages
+      .filter(m => m.type === 'image' && m.image?.url)
+      .map(m => {
+        return new Promise<void>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            imageCache.set(m.image!.url!, img);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = m.image!.url!;
+        });
+      })
+    );
+
+    await document.fonts.ready;
     
     console.log('[Exporter] captureImageFromCanvas called with:', {
       messageCount: messages.length,
@@ -373,6 +454,7 @@ export class Exporter {
       messages,
       users,
       darkMode,
+      imageCache,
     });
     
     return canvasToBlobUtil(canvas);
@@ -397,7 +479,8 @@ export class Exporter {
     platformConfig: PlatformExportConfig,
     onProgress: (progress: number) => void,
     darkMode: boolean = false,
-    framesPerMessage?: number
+    framesPerMessage?: number,
+    users: UserProfile[] = []
   ): Promise<Blob> {
     if (!this.ffmpeg || !this.loaded) {
       await this.init();
@@ -415,6 +498,21 @@ export class Exporter {
       .map(m => m.image!.url!);
     
     const imageCache = new Map<string, HTMLImageElement>();
+
+    await Promise.all(users.map(user => {
+      if (!user.avatar) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          imageCache.set(`avatar:${user.name}`, img);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = user.avatar;
+      });
+    }));
+
     await Promise.all(imageUrls.map(url => {
       return new Promise<void>((resolve) => {
         const img = new Image();
@@ -428,12 +526,20 @@ export class Exporter {
       });
     }));
 
-    const { renderChatToCanvas, canvasToBlob: canvasToBlobUtil } = await import('./canvasRenderer');
+    const { renderChatToCanvas } = await import('./canvasRenderer');
     await document.fonts.ready;
 
     const dpr = window.devicePixelRatio || 1;
     const framesPerMsg = framesPerMessage ?? Math.round(fps / 2);
-    const finalFramePause = framesPerMessage ?? fps;
+
+    console.log('[recordVideo] Starting with params:', {
+      fps,
+      width,
+      height,
+      dpr,
+      framesPerMsg,
+      messagesCount: messages.length
+    });
 
     let frameIndex = 0;
 
@@ -445,7 +551,7 @@ export class Exporter {
         styles,
         title: platformConfig.name,
         messages: messages.slice(0, i + 1),
-        users: [],
+        users,
         imageCache,
         darkMode,
       });
@@ -458,7 +564,10 @@ export class Exporter {
         targetCanvas.height = height * dpr;
 
         const targetCtx = targetCanvas.getContext('2d');
-        if (!targetCtx) continue;
+        if (!targetCtx) {
+          console.error('[recordVideo] Failed to get 2d context for frame', frameIndex);
+          continue;
+        }
         targetCtx.scale(dpr, dpr);
 
         targetCtx.fillStyle = styles.background;
@@ -480,11 +589,14 @@ export class Exporter {
         });
 
         if (blob) {
+          console.log(`[recordVideo] Generated frame ${frameIndex}, size: ${blob.size} bytes`);
           const filename = `frame${String(frameIndex).padStart(5, '0')}.png`;
           const arrayBuffer = await blob.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
           await ffmpeg.writeFile(filename, uint8Array);
           frameIndex++;
+        } else {
+          console.error(`[recordVideo] Failed to generate blob for frame ${frameIndex}`);
         }
       }
 
@@ -492,43 +604,40 @@ export class Exporter {
       onProgress(Math.min(progress, 80));
     }
 
-    // 最后一条消息额外停留
-    for (let e = 0; e < finalFramePause; e++) {
-      const pauseCanvas = document.createElement('canvas');
-      renderChatToCanvas(pauseCanvas, {
-        width,
-        height,
-        styles,
-        title: platformConfig.name,
-        messages,
-        users: [],
-        imageCache,
-        darkMode,
-      });
-      
-      const pauseBlob = await canvasToBlobUtil(pauseCanvas);
-      const pauseArrayBuffer = await pauseBlob.arrayBuffer();
-      const pauseData = new Uint8Array(pauseArrayBuffer);
-      
-      const pauseFilename = `frame${String(frameIndex).padStart(5, '0')}.png`;
-      await ffmpeg.writeFile(pauseFilename, pauseData);
-      frameIndex++;
-    }
-
     onProgress(85);
+
+    console.log(`[recordVideo] Generated ${frameIndex} frames, executing FFmpeg`);
+    console.log('[recordVideo] FFmpeg command args:', [
+      '-framerate', String(fps),
+      '-start_number', '0',
+      '-i', 'frame%05d.png',
+      '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-preset', 'fast',
+      '-y',
+      'output.mp4'
+    ]);
+
+    if (frameIndex === 0) {
+      throw new Error('没有生成任何帧，无法合成视频');
+    }
 
     try {
       await ffmpeg.exec([
         '-framerate', String(fps),
+        '-start_number', '0',
         '-i', 'frame%05d.png',
+        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         '-preset', 'fast',
         '-y',
         'output.mp4'
       ]);
+      console.log('[recordVideo] FFmpeg execution completed successfully');
     } catch (e) {
-      console.error('FFmpeg exec error:', e);
+      console.error('[recordVideo] FFmpeg exec error:', e);
       throw new Error('视频合成失败: ' + (e as Error).message);
     }
 
@@ -537,6 +646,7 @@ export class Exporter {
     let data: Uint8Array;
     try {
       data = await ffmpeg.readFile('output.mp4') as Uint8Array;
+      console.log(`[recordVideo] Read output.mp4, size: ${data.length} bytes`);
     } catch (e) {
       console.error('Read file error:', e);
       throw new Error('读取输出文件失败');
@@ -550,6 +660,9 @@ export class Exporter {
 
     onProgress(100);
 
-    return new Blob([data as unknown as BlobPart], { type: 'video/mp4' });
+    const resultBlob = new Blob([data as unknown as BlobPart], { type: 'video/mp4' });
+    console.log(`[recordVideo] Final blob size: ${resultBlob.size} bytes`);
+
+    return resultBlob;
   }
 }

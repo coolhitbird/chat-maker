@@ -77,6 +77,17 @@ export default function MessageContent({
       );
     }
 
+    // 文件消息
+    if (message?.type === 'file' && message.file) {
+      return (
+        <components.file
+          data={message.file}
+          isUser={message.role === 'user'}
+          scale={scale}
+        />
+      );
+    }
+
     // 图片消息无数据时显示占位符
     if (message?.type === 'image') {
       return (
@@ -109,16 +120,18 @@ export default function MessageContent({
             return part;
           }
           return (
-            <img 
+            <span 
               key={index}
-              src={part.emoji.url} 
-              alt={part.emoji.key}
+              title={part.emoji.key}
               style={{ 
-                width: 20, 
-                height: 20, 
-                verticalAlign: 'middle' 
+                fontSize: 18, 
+                verticalAlign: 'middle',
+                display: 'inline-block',
+                lineHeight: 1,
               }}
-            />
+            >
+              {part.emoji.unicode || part.emoji.key}
+            </span>
           );
         })}
       </span>

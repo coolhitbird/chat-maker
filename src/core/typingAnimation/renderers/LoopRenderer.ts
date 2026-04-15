@@ -104,29 +104,85 @@ function drawFile(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
 
 function drawQuote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, quote: Message['quote'], fontSize: number, scale: number = 1): number {
   if (!quote) return 0;
-  const lineH = Math.round(fontSize * 1.3);
-  const blockH = lineH * 2 + Math.round(8 * scale);
+  const miniScale = 0.6;
   const barW = Math.round(3 * scale);
   const pad = Math.round(6 * scale);
-  ctx.fillStyle = 'rgba(0,0,0,0.05)';
-  ctx.beginPath(); ctx.roundRect(x, y, w, blockH, Math.round(4 * scale)); ctx.fill();
-  ctx.fillStyle = '#C9C9C9'; ctx.fillRect(x, y, barW, blockH);
-  const textX = x + barW + pad;
-  const maxW = w - barW - pad * 2;
-  ctx.fillStyle = '#888';
-  ctx.font = `bold ${Math.round(fontSize * 0.78)}px "Microsoft YaHei", sans-serif`;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText(quote.sender, textX, y + Math.round(4 * scale));
-  ctx.font = `${Math.round(fontSize * 0.78)}px "Microsoft YaHei", sans-serif`;
-  let summary = quote.content;
-  while (summary.length > 1 && ctx.measureText(summary).width > maxW) summary = summary.slice(0, -1);
-  ctx.fillText(summary, textX, y + Math.round(4 * scale) + lineH);
-  return blockH + Math.round(4 * scale);
+  const innerPad = Math.round(8 * miniScale * scale);
+  const contentX = x + barW + pad;
+  const contentWidth = w - barW - pad * 2;
+  const actualFontSize = Math.round(fontSize * miniScale * 0.9);
+  const lineH = Math.round(fontSize * miniScale * 1.25);
+  const textX = contentX + innerPad;
+  const maxW = contentWidth - innerPad * 2;
+
+  let contentHeight: number;
+  if (quote.type === 'file' && quote.file) {
+    contentHeight = Math.round(48 * miniScale * scale);
+    drawFile(ctx, contentX, y, contentWidth, contentHeight, quote.file, Math.round(6 * miniScale * scale), miniScale * scale);
+  } else if (quote.type === 'image' && quote.image) {
+    contentHeight = Math.round(120 * miniScale * scale);
+    drawImageMessage(ctx, contentX, y, contentWidth, contentHeight, quote.image, new Map(), miniScale * scale);
+  } else {
+    // 计算实际行数（最多2行）+ 动态高度
+    let summary = quote.content || '';
+    const lines: string[] = [];
+    let currentLine = '';
+    ctx.font = `${actualFontSize}px "Microsoft YaHei", sans-serif`;
+    for (const ch of summary) {
+      const testLine = currentLine + ch;
+      if (ctx.measureText(testLine).width > maxW && currentLine) {
+        lines.push(currentLine);
+        currentLine = ch;
+        if (lines.length >= 2) break;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (lines.length < 2 && currentLine) {
+      lines.push(currentLine);
+    }
+    // 末尾加省略号
+    if (summary.length > lines.join('').length && lines.length >= 2) {
+      let truncated = lines[1];
+      while (truncated.length > 0 && ctx.measureText(truncated + '...').width > maxW) {
+        truncated = truncated.slice(0, -1);
+      }
+      lines[1] = truncated + '...';
+    }
+
+    // 动态高度 = 上下padding + 发消息人行 + 内容行
+    contentHeight = innerPad + lineH + lines.length * lineH + innerPad;
+
+    // 气泡背景
+    drawBubble(ctx, contentX, y, contentWidth, contentHeight, Math.round(8 * miniScale * scale), 'rgba(0,0,0,0.05)');
+
+    // 文字垂直居中：计算内容区域中心
+    const textBlockTop = y + innerPad;
+    const senderCenterY = textBlockTop + lineH / 2;
+    const contentBlockCenterY = textBlockTop + lineH + (lines.length * lineH) / 2;
+
+    ctx.fillStyle = '#111';
+    ctx.font = `bold ${actualFontSize}px "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(quote.sender, textX, senderCenterY);
+
+    ctx.fillStyle = '#666';
+    ctx.font = `${actualFontSize}px "Microsoft YaHei", sans-serif`;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], textX, contentBlockCenterY - ((lines.length - 1) / 2 - i) * lineH);
+    }
+  }
+
+  ctx.fillStyle = '#C9C9C9';
+  ctx.fillRect(x, y, barW, contentHeight);
+  return contentHeight + Math.round(4 * scale);
 }
 
 function drawRedPacket(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, rp: Message['redPacket'], isOpened: boolean, PAD: number, scale: number = 1) {
   const iconSize = Math.round(48 * scale);
-  const bodyH = h - Math.round(32 * scale);
+  const footerH = Math.round(22 * scale);
+  const bodyH = h - footerH;
   const r = Math.min(Math.round(18 * scale), w / 2, bodyH / 2);
 
   const gradient = ctx.createLinearGradient(x, y, x + w, y + bodyH);
@@ -170,7 +226,7 @@ function drawRedPacket(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.fillText(rp?.greeting || '恭喜发财', contentX, iconY + Math.round(26 * scale));
 
   ctx.fillStyle = 'rgba(255,255,255,0.95)';
-  ctx.fillRect(x, y + bodyH, w, Math.round(32 * scale));
+  ctx.fillRect(x, y + bodyH, w, footerH);
 
   ctx.strokeStyle = 'rgba(0,0,0,0.1)';
   ctx.lineWidth = 0.5;
@@ -183,12 +239,13 @@ function drawRedPacket(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.font = `${Math.round(11 * scale)}px "Microsoft YaHei", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(isOpened ? `已领取 ¥${((rp?.amount || 0) / 100).toFixed(2)}` : '领取红包', x + w / 2, y + bodyH + Math.round(16 * scale));
+  ctx.fillText(isOpened ? `已领取 ¥${((rp?.amount || 0) / 100).toFixed(2)}` : '领取红包', x + w / 2, y + bodyH + footerH / 2);
 }
 
 function drawTransfer(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, tf: Message['transfer'], isReceived: boolean, PAD: number, scale: number = 1) {
   const iconSize = Math.round(44 * scale);
-  const bodyH = h - Math.round(32 * scale);
+  const footerH = Math.round(22 * scale);
+  const bodyH = h - footerH;
   const r = Math.min(Math.round(18 * scale), w / 2, bodyH / 2);
 
   ctx.beginPath();
@@ -227,7 +284,7 @@ function drawTransfer(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.fillText(`¥${((tf?.amount || 0) / 100).toFixed(2)}`, contentX, iconY + Math.round(24 * scale));
 
   ctx.fillStyle = '#fff';
-  ctx.fillRect(x, y + bodyH, w, Math.round(32 * scale));
+  ctx.fillRect(x, y + bodyH, w, footerH);
 
   ctx.strokeStyle = '#e0e0e0';
   ctx.lineWidth = 0.5;
@@ -240,7 +297,7 @@ function drawTransfer(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.font = `${Math.round(11 * scale)}px "Microsoft YaHei", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(isReceived ? '已收款' : '待收款', x + w / 2, y + bodyH + Math.round(16 * scale));
+  ctx.fillText(isReceived ? '已收款' : '待收款', x + w / 2, y + bodyH + footerH / 2);
 }
 
 function drawImageMessage(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, img: Message['image'], imageCache: Map<string, HTMLImageElement>, scale: number = 1) {
@@ -327,7 +384,7 @@ function drawVoiceMessage(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.fillText(`${voice?.duration || 0}"`, x + w - PAD - Math.round(40 * scale), y + waveAreaH / 2);
 
   if (voice?.text) {
-    const textTopPadding = Math.round(6 * scale);
+    const textTopPadding = PAD;
     const textY = y + waveAreaH + textTopPadding;
     const textColor = darkMode ? '#fff' : '#333';
     ctx.fillStyle = textColor;
@@ -518,8 +575,14 @@ function renderLayouts(
       drawFile(ctx, layout.bubbleX, adjustedY + senderHeight, layout.bubbleWidth, layout.bubbleHeight, msg.file, bubblePadding, scale);
     } else if (text) {
       drawBubble(ctx, layout.bubbleX, adjustedY + senderHeight, layout.bubbleWidth, layout.bubbleHeight, bubbleRadius, bubbleBg);
-      const quoteH = drawQuote(ctx, layout.bubbleX + bubblePadding, adjustedY + senderHeight + bubblePadding, layout.bubbleWidth - bubblePadding * 2, msg.quote, fontSize, scale);
-      drawTextInBubble(ctx, text, layout.bubbleX + bubblePadding, adjustedY + senderHeight + bubblePadding + quoteH, layout.bubbleWidth - bubblePadding * 2, fontSize, bubbleColor, lineHeight, layout.bubbleHeight - bubblePadding * 2);
+      const quoteH = msg.quote
+        ? drawQuote(ctx, layout.bubbleX + bubblePadding, adjustedY + senderHeight + bubblePadding, layout.bubbleWidth - bubblePadding * 2, msg.quote, fontSize, scale)
+        : 0;
+      const textStartY = adjustedY + senderHeight + bubblePadding + quoteH;
+      const textAreaHeight = quoteH > 0
+        ? layout.bubbleHeight - quoteH
+        : layout.bubbleHeight;
+      drawTextInBubble(ctx, text, layout.bubbleX + bubblePadding, textStartY, layout.bubbleWidth - bubblePadding * 2, fontSize, bubbleColor, lineHeight, textAreaHeight);
 
       if (cursorEnabled && typingState?.isTyping && layout.isCurrentTyping) {
         const lastLineWidth = Math.min(ctx.measureText(text).width, layout.bubbleWidth - bubblePadding * 2);
@@ -715,12 +778,60 @@ export class LoopTypingRenderer {
       ctx.fillStyle = darkMode ? '#1f1f1f' : (DEFAULT_EXPORT_STYLES.background || '#f5f5f5');
       ctx.fillRect(0, 0, width, height);
 
-      // Draw status bar (mobile/portrait only)
+      // Set clip region for content area (below header/status bar)
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, statusBarHeight + headerHeight, width, height - statusBarHeight - headerHeight);
+      ctx.clip();
+
+      const typingProgress = new Map<string, { text: string; isTyping: boolean }>();
+      const fullProgress = new Map<string, { text: string; isTyping: boolean }>();
+      
+      for (let i = 0; i < visibleMessages.length; i++) {
+        const msg = visibleMessages[i];
+        const visibleTime = messageVisibleAt.get(msg.id) || 0;
+        const elapsed = (t - visibleTime) * speedMultiplier;
+
+        if (msg.type === 'system') {
+          typingProgress.set(msg.id, { text: msg.content || '', isTyping: false });
+        } else if (sequences.has(msg.id) && !config.fastMode) {
+          const sequence = sequences.get(msg.id)!;
+          const result = getVisibleContentAtTime(sequence, elapsed);
+          typingProgress.set(msg.id, { text: result.text, isTyping: result.isTyping });
+        } else {
+          typingProgress.set(msg.id, { text: msg.content || '', isTyping: false });
+        }
+        fullProgress.set(msg.id, { text: msg.content || '', isTyping: false });
+      }
+
+      const { layouts } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, currentTypingIndex, scale);
+      // 满屏后才开始滚动：用完整内容高度判断，避免打字中途气泡高度变化导致抖动
+      const { totalHeight: fullTotalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, fullProgress, undefined, scale);
+      const scrollOffset = Math.max(0, fullTotalHeight - visibleContentHeight);
+
+      renderLayouts(ctx, layouts, typingProgress, scrollOffset, layoutConfig, darkMode, imageCache, config.cursorEnabled, config.cursorBlinkRate, t, scale, userAvatarMap);
+
+      // Restore clip and redraw header/status bar on top
+      ctx.restore();
+
+      // Redraw header background
+      ctx.fillStyle = darkMode ? '#2d2d2d' : (DEFAULT_EXPORT_STYLES.headerBg || '#f5f5f5');
+      ctx.fillRect(0, statusBarHeight, width, headerHeight);
+
+      // Redraw header title
+      ctx.fillStyle = darkMode ? '#ffffff' : (DEFAULT_EXPORT_STYLES.headerColor || '#1a1a1a');
+      ctx.font = `bold ${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(title, width / 2, statusBarHeight + headerHeight / 2);
+      ctx.textAlign = 'left';
+
+      // Redraw status bar
       if (isMobile) {
-        const showStatusBar = (DEFAULT_EXPORT_STYLES as any).showStatusBar !== false;
+        const showStatusBar = DEFAULT_EXPORT_STYLES.showStatusBar !== false;
         if (showStatusBar) {
-          const statusBg = darkMode ? '#1a1a1a' : ((DEFAULT_EXPORT_STYLES as any).statusBarBg || DEFAULT_EXPORT_STYLES.headerBg || '#f5f5f5');
-          const statusColor = darkMode ? '#888' : ((DEFAULT_EXPORT_STYLES as any).statusBarColor || DEFAULT_EXPORT_STYLES.headerColor || '#1a1a1a');
+          const statusBg = darkMode ? '#1a1a1a' : (DEFAULT_EXPORT_STYLES.statusBarBg || DEFAULT_EXPORT_STYLES.headerBg || '#f5f5f5');
+          const statusColor = darkMode ? '#888' : (DEFAULT_EXPORT_STYLES.statusBarColor || DEFAULT_EXPORT_STYLES.headerColor || '#1a1a1a');
           ctx.fillStyle = statusBg;
           ctx.fillRect(0, 0, width, statusBarHeight);
 
@@ -735,7 +846,7 @@ export class LoopTypingRenderer {
           const signalY = statusBarHeight / 2;
           ctx.fillStyle = statusColor;
           for (let i = 0; i < 4; i++) {
-            const barH = Math.round((12 - i * 2) * scale); // 12, 10, 8, 6 - tallest to shortest
+            const barH = Math.round((12 - i * 2) * scale);
             const barW = Math.round(3 * scale);
             const barGap = Math.round(5 * scale);
             ctx.fillRect(signalX + i * barGap, signalY - barH / 2, barW, barH);
@@ -767,43 +878,6 @@ export class LoopTypingRenderer {
           ctx.fillRect(batteryX + batteryW, signalY - batteryNubH / 2, batteryNubW, batteryNubH);
         }
       }
-
-      ctx.fillStyle = darkMode ? '#2d2d2d' : (DEFAULT_EXPORT_STYLES.headerBg || '#f5f5f5');
-      ctx.fillRect(0, statusBarHeight, width, headerHeight);
-
-      ctx.fillStyle = darkMode ? '#ffffff' : (DEFAULT_EXPORT_STYLES.headerColor || '#1a1a1a');
-      ctx.font = `bold ${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(title, width / 2, statusBarHeight + headerHeight / 2);
-      ctx.textAlign = 'left';
-
-      const typingProgress = new Map<string, { text: string; isTyping: boolean }>();
-      const fullProgress = new Map<string, { text: string; isTyping: boolean }>();
-      
-      for (let i = 0; i < visibleMessages.length; i++) {
-        const msg = visibleMessages[i];
-        const visibleTime = messageVisibleAt.get(msg.id) || 0;
-        const elapsed = (t - visibleTime) * speedMultiplier;
-
-        if (msg.type === 'system') {
-          typingProgress.set(msg.id, { text: msg.content || '', isTyping: false });
-        } else if (sequences.has(msg.id) && !config.fastMode) {
-          const sequence = sequences.get(msg.id)!;
-          const result = getVisibleContentAtTime(sequence, elapsed);
-          typingProgress.set(msg.id, { text: result.text, isTyping: result.isTyping });
-        } else {
-          typingProgress.set(msg.id, { text: msg.content || '', isTyping: false });
-        }
-        fullProgress.set(msg.id, { text: msg.content || '', isTyping: false });
-      }
-
-      const { layouts } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, typingProgress, currentTypingIndex, scale);
-      // 满屏后才开始滚动：用完整内容高度判断，避免打字中途气泡高度变化导致抖动
-      const { totalHeight: fullTotalHeight } = calculateAllLayouts(ctx, visibleMessages, layoutConfig, fullProgress, undefined, scale);
-      const scrollOffset = Math.max(0, fullTotalHeight - visibleContentHeight);
-
-      renderLayouts(ctx, layouts, typingProgress, scrollOffset, layoutConfig, darkMode, imageCache, config.cursorEnabled, config.cursorBlinkRate, t, scale, userAvatarMap);
 
       // 用同步 toDataURL 替代异步 toBlob，大幅提升速度
       const dataUrl = canvas.toDataURL('image/png');

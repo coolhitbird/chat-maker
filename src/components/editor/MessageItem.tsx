@@ -8,17 +8,35 @@ interface MessageItemProps {
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onQuote?: () => void;
 }
 
 const AVATAR_SIZE = 40;
 
-export default function MessageItem({ message, onDelete, onMoveUp, onMoveDown }: MessageItemProps) {
+export default function MessageItem({ message, onDelete, onMoveUp, onMoveDown, onQuote }: MessageItemProps) {
   const { project } = useChatStore();
   const user = project.users.find(u => u.name === message.sender);
   const avatar = user?.avatar || message.avatar;
   const isUser = message.role === 'user';
+  const isSystem = message.type === 'system';
 
   const senderHeight = AVATAR_SIZE * defaultLayoutConfig.avatarSection.senderName.heightRatio;
+
+  // 系统消息居中显示，无头像
+  if (isSystem) {
+    return (
+      <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+        <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
+          {message.content}
+        </div>
+        <div className="flex flex-col gap-1 ml-2">
+          <button onClick={onMoveUp} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 text-xs">↑</button>
+          <button onClick={onDelete} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-xs">×</button>
+          <button onClick={onMoveDown} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 text-xs">↓</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex items-start gap-2 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -37,6 +55,9 @@ export default function MessageItem({ message, onDelete, onMoveUp, onMoveDown }:
         <button onClick={onMoveUp} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">↑</button>
         <button onClick={onDelete} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400">×</button>
         <button onClick={onMoveDown} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">↓</button>
+        {onQuote && message.type !== 'system' && (
+          <button onClick={onQuote} className="text-blue-400 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 text-xs" title="引用此消息">↩</button>
+        )}
       </div>
     </div>
   );

@@ -111,44 +111,53 @@ export function calculateMessageHeight(
       return { rowHeight: Math.round(28 * scale), bubbleWidth: 0, bubbleHeight: 0 };
 
     case 'redpacket':
-      bubbleWidth = Math.round(180 * scale);
-      bubbleHeight = Math.round(102 * scale);
+      const rpQuoteHeight = msg.quote ? Math.round(fontSize * 0.75) * 2 + Math.round(30 * scale) : 0;
+      bubbleWidth = Math.round(200 * scale);
+      bubbleHeight = Math.round(80 * scale) + rpQuoteHeight;
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
 
     case 'transfer':
-      bubbleWidth = Math.round(180 * scale);
-      bubbleHeight = Math.round(120 * scale);
+      const trQuoteHeight = msg.quote ? Math.round(fontSize * 0.75) * 2 + Math.round(30 * scale) : 0;
+      bubbleWidth = Math.round(200 * scale);
+      bubbleHeight = Math.round(80 * scale) + trQuoteHeight;
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
 
     case 'image':
+      const imgQuoteHeight = msg.quote ? Math.round(fontSize * 0.75) * 2 + Math.round(30 * scale) : 0;
       bubbleWidth = Math.round(180 * scale);
-      bubbleHeight = Math.round(180 * scale);
+      bubbleHeight = Math.round(180 * scale) + imgQuoteHeight;
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
 
     case 'file':
+      const fileQuoteHeight = msg.quote ? Math.round(fontSize * 0.75) * 2 + Math.round(30 * scale) : 0;
       bubbleWidth = Math.round(220 * scale);
-      bubbleHeight = Math.round(64 * scale);
+      bubbleHeight = Math.round(64 * scale) + fileQuoteHeight;
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
       
-    case 'voice':
-      bubbleWidth = Math.max(Math.round(120 * scale), Math.round(60 * scale + (msg.voice?.duration || 5) * 10 * scale));
+    case 'voice': {
+      const quoteHeight = msg.quote ? Math.round(fontSize * 0.75) * 2 + Math.round(30 * scale) : 0;
       if (msg.voice?.text) {
         const textLayout = calculateTextLayout(ctx, msg.voice.text, maxBubbleWidth, fontSize, bubblePadding);
-        bubbleHeight = Math.round(36 * scale) + textLayout.height + Math.round(12 * scale);
+        bubbleWidth = Math.min(textLayout.width, maxBubbleWidth);
+        bubbleHeight = Math.round(40 * scale) + textLayout.height + quoteHeight;
       } else {
-        bubbleHeight = Math.round(36 * scale);
+        const waveformArea = Math.max(Math.round(60 * scale), Math.round((msg.voice?.duration || 5) * 8 * scale));
+        bubbleWidth = Math.max(Math.round(120 * scale), Math.round(44 * scale + waveformArea));
+        bubbleHeight = waveformArea + quoteHeight;
       }
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
+    }
       
     default: {
+      const quoteHeight = msg.quote ? Math.round(fontSize * 0.75) * 2 + Math.round(30 * scale) : 0;
       const textLayout = calculateTextLayout(ctx, content, maxBubbleWidth, fontSize, bubblePadding);
       bubbleWidth = Math.min(textLayout.width, maxBubbleWidth);
-      bubbleHeight = Math.max(textLayout.height, Math.round(40 * scale));
+      bubbleHeight = Math.max(textLayout.height, Math.round(40 * scale)) + quoteHeight;
       rowHeight = Math.max(avatarSize, senderHeight + bubbleHeight);
       return { rowHeight, bubbleWidth, bubbleHeight };
     }

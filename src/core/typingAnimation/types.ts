@@ -84,6 +84,9 @@ export const DEFAULT_EXPORT_STYLES = {
   background: '#f5f5f5',
   headerBg: '#f5f5f5',
   headerColor: '#1a1a1a',
+  showStatusBar: true,
+  statusBarBg: '#1a1a1a',
+  statusBarColor: '#888888',
 };
 
 export interface TypingRenderContext {

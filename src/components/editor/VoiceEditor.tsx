@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { generateAvatar } from '@/utils/avatar';
 import type { Message, VoiceData } from '@/types';
@@ -10,9 +10,14 @@ interface VoiceEditorProps {
 
 export default function VoiceEditor({ isOpen, onClose }: VoiceEditorProps) {
   const { project, addMessage } = useChatStore();
-  const [sender, setSender] = useState(project.users[0]?.name || '用户A');
+  const [sender, setSender] = useState(project.users[0]?.name || '');
   const [duration, setDuration] = useState(5);
   const [text, setText] = useState('');
+
+  // 项目切换时同步 sender 到第一个用户
+  useEffect(() => {
+    if (project.users[0]) setSender(project.users[0].name);
+  }, [project.id]);
 
   const handleSubmit = () => {
     const voiceData: VoiceData = {

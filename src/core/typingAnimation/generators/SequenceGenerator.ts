@@ -3,6 +3,7 @@ import type { TypingAnimationConfig, TypingEvent, MessageTypingSequence } from '
 import { splitIntoWords, getWordLength } from './ChineseWordSplitter';
 
 const COMMON_TYPOS: Record<string, string[]> = {
+  // 英文字母（键盘相邻键）
   'q': ['w', 'a'],
   'w': ['q', 'e', 's', 'a'],
   'e': ['w', 'r', 'd', 's'],
@@ -29,24 +30,144 @@ const COMMON_TYPOS: Record<string, string[]> = {
   'b': ['v', 'g', 'h', 'n'],
   'n': ['b', 'h', 'j', 'm'],
   'm': ['n', 'j', 'k'],
-  '你': ['我', '他', '她', '您'],
+  // 常见中文错字（拼音相似或形近）
+  '你': ['您', '他', '她', '我'],
   '我': ['你', '他', '她', '们'],
-  '他': ['你', '我', '她'],
-  '她': ['你', '我', '他'],
-  '好': ['很', '的', '吗', '吧'],
+  '他': ['她', '它', '你', '我'],
+  '她': ['他', '它', '你', '我'],
+  '它': ['他', '她'],
+  '好': ['很', '吗', '吧', '呢'],
   '是': ['的', '不', '有', '在'],
   '不': ['是', '在', '有', '没'],
   '在': ['不', '有', '是', '这'],
-  '了': ['的', '着', '过', '吧'],
-  '的': ['了', '地', '得'],
+  '了': ['的', '着', '过', '呢'],
+  '的': ['了', '地', '得', '呢'],
   '啊': ['呀', '吧', '呢', '哦'],
   '吧': ['啊', '呀', '呢', '吗'],
   '吗': ['吧', '呢', '啊', '呀'],
+  '呢': ['吗', '吧', '啊', '呀'],
+  '呀': ['啊', '吧', '呢', '哦'],
+  '哦': ['啊', '呀', '呢', '噢'],
+  '很': ['好', '真', '太', '挺'],
+  '真': ['很', '太', '挺', '最'],
+  '太': ['很', '真', '挺', '最'],
+  '还': ['会', '能', '都', '又'],
+  '会': ['还', '能', '都', '又'],
+  '能': ['还', '会', '都', '可'],
+  '都': ['还', '会', '能', '全'],
+  '就': ['才', '都', '也', '却'],
+  '才': ['就', '都', '也', '只'],
+  '也': ['都', '就', '才', '还'],
+  '有': ['没', '在', '是', '要'],
+  '没': ['有', '不', '无', '别'],
+  '要': ['会', '能', '想', '得'],
+  '想': ['要', '会', '能', '得'],
+  '去': ['来', '走', '到', '过'],
+  '来': ['去', '走', '到', '过'],
+  '走': ['去', '来', '跑', '到'],
+  '到': ['去', '来', '走', '过'],
+  '说': ['讲', '问', '叫', '谈'],
+  '讲': ['说', '问', '叫', '谈'],
+  '问': ['说', '讲', '叫', '答'],
+  '看': ['见', '望', '瞧', '盯'],
+  '见': ['看', '望', '瞧', '现'],
+  '知': ['道', '识', '懂', '觉'],
+  '道': ['知', '路', '到', '理'],
+  '这': ['那', '此', '哪', '怎'],
+  '那': ['这', '哪', '哪', '彼'],
+  '怎': ['什', '为', '何', '么'],
+  '么': ['吗', '呢', '么', '嘛'],
+  '什': ['怎', '为', '哪', '何'],
+  '为': ['因', '怎', '什', '何'],
+  '因': ['为', '所', '由', '缘'],
+  '可': ['能', '会', '要', '得'],
+  '以': ['已', '一', '与', '予'],
+  '已': ['以', '一', '也', '经'],
+  '一': ['已', '以', '二', '不'],
+  '二': ['一', '三', '两', '儿'],
+  '三': ['二', '四', '山', '删'],
+  '个': ['各', '们', '位', '过'],
+  '们': ['个', '位', '的', '么'],
+  '和': ['与', '跟', '同', '或'],
+  '与': ['和', '跟', '同', '或'],
+  '跟': ['和', '与', '同', '给'],
+  '同': ['和', '与', '跟', '通'],
+  '但': ['可', '却', '只', '因'],
+  '却': ['但', '可', '只', '就'],
+  '只': ['但', '却', '就', '这'],
+  '又': ['还', '也', '再', '更'],
+  '再': ['又', '还', '也', '在'],
+  '更': ['最', '很', '太', '越'],
+  '最': ['更', '很', '太', '真'],
+  '对': ['错', '比', '向', '跟'],
+  '错': ['对', '差', '误', '过'],
+  '过': ['错', '去', '经', '度'],
+  '经': ['过', '已', '曾', '常'],
+  '常': ['经', '总', '老', '平'],
+  '总': ['常', '都', '全', '老'],
+  '老': ['常', '总', '旧', '少'],
+  '少': ['多', '老', '小', '大'],
+  '多': ['少', '大', '很', '太'],
+  '大': ['小', '多', '太', '大'],
+  '小': ['大', '少', '微', '细'],
+  '上': ['下', '尚', '让', '与'],
+  '下': ['上', '吓', '不', '无'],
+  '里': ['外', '面', '内', '中'],
+  '外': ['里', '面', '出', '另'],
+  '面': ['里', '外', '方', '边'],
+  '边': ['面', '方', '旁', '侧'],
+  '前': ['后', '先', '早', '原'],
+  '后': ['前', '最', '然', '候'],
+  '左': ['右', '佐', '在', '做'],
+  '右': ['左', '又', '有', '佑'],
+  '天': ['日', '时', '周', '夫'],
+  '日': ['天', '月', '曰', '白'],
+  '月': ['日', '周', '年', '明'],
+  '年': ['月', '日', '季', '纪'],
+  '时': ['天', '候', '期', '间'],
+  '候': ['时', '后', '等', '客'],
+  '等': ['候', '待', '级', '差'],
+  '人': ['入', '大', '个', '仁'],
+  '入': ['人', '八', '人', '内'],
+  '出': ['入', '山', '击', '去'],
+  '心': ['必', '思', '意', '忘'],
+  '手': ['毛', '看', '拿', '打'],
+  '眼': ['目', '睛', '看', '眉'],
+  '头': ['大', '首', '项', '点'],
+  '点': ['头', '地', '些', '占'],
+  '地': ['的', '得', '点', '土'],
+  '得': ['的', '地', '德', '到'],
+  '开': ['关', '启', '并', '门'],
+  '关': ['开', '闭', '门', '过'],
+  '门': ['开', '关', '问', '闪'],
+  '车': ['东', '连', '轨', '轮'],
+  '路': ['道', '街', '途', '径'],
+  '家': ['官', '室', '庭', '居'],
+  '国': ['围', '图', '圆', '内'],
+  '学': ['觉', '字', '校', '习'],
+  '生': ['主', '声', '性', '星'],
+  '工': ['土', '干', '左', '作'],
+  '作': ['做', '坐', '工', '昨'],
+  '做': ['作', '坐', '故'],
+  '坐': ['作', '做', '座', '昨'],
+  '吃': ['喝', '去', '口', '乞'],
+  '喝': ['吃', '渴', '口', '呵'],
+  '玩': ['现', '顽', '整', '完'],
+  '听': ['说', '讲', '声', '经'],
+  '写': ['字', '与', '作', '止'],
+  '字': ['学', '子', '写', '文'],
+  '书': ['写', '文', '籍', '画'],
+  '画': ['书', '图', '界'],
+  '爱': ['受', '友', '情', '要'],
+  '情': ['爱', '心', '感', '请'],
+  '友': ['爱', '朋', '发', '又'],
+  '朋': ['友', '明', '用', '月'],
 };
 
 function getTypo(char: string): string | null {
   const typos = COMMON_TYPOS[char];
-  if (typos && Math.random() < 0.7) {
+  if (typos) {
+    // 移除内部的70%概率检查，让配置的 typoProbability 直接生效
     return typos[Math.floor(Math.random() * typos.length)];
   }
   return null;
@@ -54,6 +175,58 @@ function getTypo(char: string): string | null {
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+/**
+ * 添加单个字符的打字事件，包含错字处理逻辑
+ * @returns 新的 timestamp
+ */
+function addCharWithTypo(
+  events: TypingEvent[],
+  char: string,
+  timestamp: number,
+  config: TypingAnimationConfig
+): number {
+  // 错字处理
+  if (config.typoEnabled && Math.random() < config.typoProbability) {
+    const typo = getTypo(char);
+    if (typo) {
+      // 输出错误字符
+      const typoDuration = randomBetween(config.baseSpeed, config.baseSpeed + config.speedVariance);
+      events.push({
+        type: 'char',
+        content: typo,
+        duration: typoDuration,
+        timestamp,
+        effect: 'normal',
+      });
+      timestamp += typoDuration + 300;
+
+      // 退格删除
+      events.push({
+        type: 'backspace',
+        duration: config.typoDeleteStyle === 'instant' ? 0 : 100,
+        timestamp,
+      });
+      timestamp += config.typoDeleteStyle === 'instant' ? 0 : 100;
+    }
+  }
+
+  // 输出正确字符
+  const charDuration = randomBetween(
+    config.baseSpeed - config.speedVariance / 2,
+    config.baseSpeed + config.speedVariance / 2
+  );
+  events.push({
+    type: 'char',
+    content: char,
+    duration: charDuration,
+    timestamp,
+    effect: 'normal',
+  });
+  timestamp += charDuration;
+
+  return timestamp;
 }
 
 function parseContent(content: string): Array<{ type: 'text' | 'emoji'; value: string }> {
@@ -129,40 +302,7 @@ export function generateTypingSequence(
 
         if (roll < charChance) {
           for (const char of word) {
-            if (config.typoEnabled && Math.random() < config.typoProbability) {
-              const typo = getTypo(char);
-              if (typo) {
-                const typoDuration = randomBetween(config.baseSpeed, config.baseSpeed + config.speedVariance);
-                events.push({
-                  type: 'char',
-                  content: typo,
-                  duration: typoDuration,
-                  timestamp,
-                  effect: 'normal',
-                });
-                timestamp += typoDuration + 300;
-
-                events.push({
-                  type: 'backspace',
-                  duration: config.typoDeleteStyle === 'instant' ? 0 : 100,
-                  timestamp,
-                });
-                timestamp += config.typoDeleteStyle === 'instant' ? 0 : 100;
-              }
-            }
-
-            const charDuration = randomBetween(
-              config.baseSpeed - config.speedVariance / 2,
-              config.baseSpeed + config.speedVariance / 2
-            );
-            events.push({
-              type: 'char',
-              content: char,
-              duration: charDuration,
-              timestamp,
-              effect: 'normal',
-            });
-            timestamp += charDuration;
+            timestamp = addCharWithTypo(events, char, timestamp, config);
           }
         } else if (roll < wordChance) {
           const isPaste = wordLen >= config.pasteMinLength &&
@@ -179,18 +319,7 @@ export function generateTypingSequence(
             });
           } else {
             for (const char of word) {
-              const charDuration = randomBetween(
-                config.baseSpeed - config.speedVariance / 2,
-                config.baseSpeed + config.speedVariance / 2
-              );
-              events.push({
-                type: 'char',
-                content: char,
-                duration: charDuration,
-                timestamp,
-                effect: 'normal',
-              });
-              timestamp += charDuration;
+              timestamp = addCharWithTypo(events, char, timestamp, config);
             }
           }
         } else {
@@ -208,18 +337,7 @@ export function generateTypingSequence(
             });
           } else {
             for (const char of word) {
-              const charDuration = randomBetween(
-                config.baseSpeed - config.speedVariance / 2,
-                config.baseSpeed + config.speedVariance / 2
-              );
-              events.push({
-                type: 'char',
-                content: char,
-                duration: charDuration,
-                timestamp,
-                effect: 'normal',
-              });
-              timestamp += charDuration;
+              timestamp = addCharWithTypo(events, char, timestamp, config);
             }
           }
         }

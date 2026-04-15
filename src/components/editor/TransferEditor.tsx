@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { generateAvatar } from '@/utils/avatar';
 import type { Message, TransferData } from '@/types';
@@ -8,19 +8,26 @@ interface TransferEditorProps {
   onClose: () => void;
 }
 
+const NOTE_MAX_LENGTH = 50;
+
 export default function TransferEditor({ isOpen, onClose }: TransferEditorProps) {
   const { project, addMessage } = useChatStore();
   const [amount, setAmount] = useState('10000');
   const [note, setNote] = useState('');
-  const [sender, setSender] = useState(project.users[0]?.name || '用户A');
+  const [sender, setSender] = useState(project.users[0]?.name || '');
   const [isReceived, setIsReceived] = useState(false);
+
+  // 项目切换时同步 sender 到第一个用户
+  useEffect(() => {
+    if (project.users[0]) setSender(project.users[0].name);
+  }, [project.id]);
 
   const handleSubmit = () => {
     if (parseInt(amount) <= 0) return;
 
     const transferData: TransferData = {
       amount: parseInt(amount),
-      note: note.trim() || undefined,
+      note: note.trim() ? note.trim().slice(0, NOTE_MAX_LENGTH) : undefined,
       isReceived: isReceived,
       sender: sender,
     };
@@ -81,9 +88,18 @@ export default function TransferEditor({ isOpen, onClose }: TransferEditorProps)
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && parseInt(amount) > 0) {
+                handleSubmit();
+              }
+            }}
             placeholder="例如：午饭钱"
+            maxLength={NOTE_MAX_LENGTH}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
           />
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+            {note.length}/{NOTE_MAX_LENGTH}
+          </div>
         </div>
 
         <div className="mb-4">

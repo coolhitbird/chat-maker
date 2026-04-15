@@ -38,8 +38,9 @@ export default function Voice({
         display: 'flex',
         alignItems: 'center',
         gap: `${8 * scale}px`,
-        padding: `${8 * scale}px`,
-        minWidth: `${Math.min(150, duration * 10 + 80) * scale}px`,
+        padding: `${8 * scale}px ${10 * scale}px`,
+        // 宽度：图标(20) + gap(8) + 波形(duration*6, min60) + gap(8) + 时长(30) + padding*2
+        minWidth: `${Math.min(240, Math.max(120, duration * 6 + 80)) * scale}px`,
         cursor: 'pointer',
       }}>
         {/* 播放图标 */}
@@ -87,11 +88,18 @@ export default function Voice({
         </div>
       </div>
 
-      {/* 文字内容（如果有）- 明确继承父元素字号 */}
+      {/* 文字内容（如果有）- 撑开气泡宽度 */}
       {text && (
-        <span style={{ fontSize: 'inherit', color: 'inherit' }}>
+        <div style={{
+          fontSize: 'inherit',
+          color: 'inherit',
+          lineHeight: 1.5,
+          wordBreak: 'break-word',
+          paddingLeft: `${4 * scale}px`,
+          paddingRight: `${4 * scale}px`,
+        }}>
           {text}
-        </span>
+        </div>
       )}
     </div>
   );
