@@ -1,10 +1,12 @@
+
+
 # Chat Maker - 聊天对话生成器
 
 一款高质量聊天对话生成器，支持微信、QQ、钉钉等多平台风格，可导出高清图片和 MP4 视频（含打字动画）。
 
 [![GitHub stars](https://img.shields.io/github/stars/coolhitbird/chat-maker)](https://github.com/coolhitbird/chat-maker/stargazers)
 [![GitHub license](https://img.shields.io/github/license/coolhitbird/chat-maker)](https://github.com/coolhitbird/chat-maker/blob/master/LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.2.0-blue)](https://github.com/coolhitbird/chat-maker/releases)
+[![Version](https://img.shields.io/badge/version-v2.3.0-blue)](https://github.com/coolhitbird/chat-maker/releases)
 
 ---
 
